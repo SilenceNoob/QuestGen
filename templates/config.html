@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>题目配置 - 智能题目生成系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>⚙️ 题目配置</h1>
+            <nav class="breadcrumb">
+                <a href="{{ url_for('index') }}">首页</a> > 题目配置
+            </nav>
+        </header>
+
+        <main class="main-content">
+            <div class="document-info">
+                <h3>📄 已选择文档</h3>
+                <div class="document-summary">
+                    <p><strong>文档数量：</strong>{{ document_info.selected_documents|length }} 个</p>
+                    <p><strong>总字数：</strong>{{ document_info.word_count }} 字</p>
+                    <div class="selected-docs">
+                        {% for doc in document_info.selected_documents %}
+                        <div class="doc-item">
+                            <span class="doc-name">{{ doc.filename }}</span>
+                            <span class="doc-words">({{ doc.word_count }} 字)</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="question-config">
+                <h3>📝 题目配置</h3>
+                <div class="config-form">
+                    <div class="question-type">
+                        <label for="singleChoice">单选题数量：</label>
+                        <input type="number" id="singleChoice" min="0" max="20" value="5">
+                        <span class="question-desc">每题4个选项，只有1个正确答案</span>
+                    </div>
+                    
+                    <div class="question-type">
+                        <label for="multipleChoice">多选题数量：</label>
+                        <input type="number" id="multipleChoice" min="0" max="10" value="3">
+                        <span class="question-desc">每题4个选项，可能有多个正确答案</span>
+                    </div>
+                    
+                    <div class="question-type">
+                        <label for="trueFalse">判断题数量：</label>
+                        <input type="number" id="trueFalse" min="0" max="10" value="2">
+                        <span class="question-desc">判断陈述是否正确</span>
+                    </div>
+                    
+                    <div class="total-questions">
+                        <strong>总题数：<span id="totalQuestions">10</span> 道</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="action-buttons">
+                <button type="button" class="btn btn-secondary" onclick="history.back()">返回</button>
+                <button type="button" class="btn btn-primary" id="generateBtn">
+                    <span class="btn-text">🚀 开始生成题目</span>
+                    <span class="loading-spinner" style="display: none;">⟳</span>
+                </button>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2024 智能题目生成系统. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <!-- 消息提示框 -->
+    <div id="message" class="message" style="display: none;">
+        <span id="messageText"></span>
+        <button id="messageClose" class="message-close">&times;</button>
+    </div>
+
+    <script>
+        // 获取页面元素
+        const singleChoice = document.getElementById('singleChoice');
+        const multipleChoice = document.getElementById('multipleChoice');
+        const trueFalse = document.getElementById('trueFalse');
+        const totalQuestions = document.getElementById('totalQuestions');
+        const generateBtn = document.getElementById('generateBtn');
+
+        // 更新总题数
+        function updateTotalQuestions() {
+            const total = parseInt(singleChoice.value) + parseInt(multipleChoice.value) + parseInt(trueFalse.value);
+            totalQuestions.textContent = total;
+        }
+
+        // 监听输入变化
+        [singleChoice, multipleChoice, trueFalse].forEach(input => {
+            input.addEventListener('input', updateTotalQuestions);
+        });
+
+        // 生成题目
+        generateBtn.addEventListener('click', async () => {
+            const config = {
+                single_choice: parseInt(singleChoice.value),
+                multiple_choice: parseInt(multipleChoice.value),
+                true_false: parseInt(trueFalse.value)
+            };
+            
+            const total = config.single_choice + config.multiple_choice + config.true_false;
+            if (total === 0) {
+                showMessage('请至少选择一种题型', 'error');
+                return;
+            }
+            
+            setLoading(generateBtn, true);
+            
+            try {
+                const response = await fetch('/generate_questions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(config)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage('题目生成成功！正在跳转到答题页面...', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/quiz';
+                    }, 1500);
+                } else {
+                    showMessage(result.error, 'error');
+                }
+            } catch (error) {
+                showMessage('生成失败，请重试', 'error');
+            } finally {
+                setLoading(generateBtn, false);
+            }
+        });
+
+        // 工具函数
+        function setLoading(button, loading) {
+            const text = button.querySelector('.btn-text');
+            const spinner = button.querySelector('.loading-spinner');
+            
+            if (loading) {
+                text.style.display = 'none';
+                spinner.style.display = 'inline';
+                button.disabled = true;
+            } else {
+                text.style.display = 'inline';
+                spinner.style.display = 'none';
+                button.disabled = false;
+            }
+        }
+        
+        function showMessage(text, type) {
+            const message = document.getElementById('message');
+            const messageText = document.getElementById('messageText');
+            
+            messageText.textContent = text;
+            message.className = `message ${type}`;
+            message.style.display = 'flex';
+            
+            setTimeout(() => {
+                message.style.display = 'none';
+            }, 5000);
+        }
+        
+        document.getElementById('messageClose').addEventListener('click', () => {
+            document.getElementById('message').style.display = 'none';
+        });
+    </script>
+</body>
+</html>

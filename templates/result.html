@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>答题结果 - 智能题目生成系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>📊 答题结果</h1>
+            <nav class="breadcrumb">
+                <a href="{{ url_for('index') }}">首页</a> > 
+                <a href="{{ url_for('upload_document') }}">上传文档</a> > 
+                <a href="{{ url_for('quiz') }}">在线答题</a> > 答题结果
+            </nav>
+        </header>
+
+        <main class="main-content">
+            <!-- 总体成绩 -->
+            <div class="score-summary">
+                <div class="score-card">
+                    <div class="score-main">
+                        <div class="score-circle">
+                            <div class="score-number">{{ score_result.percentage }}%</div>
+                            <div class="score-grade">{{ score_result.grade }}</div>
+                        </div>
+                        <div class="score-details">
+                            <h2>总体成绩</h2>
+                            <p class="score-text">{{ score_result.total_score }} / {{ score_result.max_score }} 分</p>
+                            <p class="accuracy-text">正确率：{{ score_result.accuracy }}%</p>
+                        </div>
+                    </div>
+                    
+                    <div class="score-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">总题数</span>
+                            <span class="stat-value">{{ score_result.total_questions }}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">正确题数</span>
+                            <span class="stat-value correct">{{ score_result.correct_count }}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">错误题数</span>
+                            <span class="stat-value incorrect">{{ score_result.total_questions - score_result.correct_count }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 分类统计 -->
+            {% if statistics.by_type %}
+            <div class="type-statistics">
+                <h3>📈 分类统计</h3>
+                <div class="type-stats-grid">
+                    {% for type_name, stats in statistics.by_type.items() %}
+                    <div class="type-stat-card">
+                        <h4>
+                            {% if type_name == 'single_choice' %}
+                                单选题
+                            {% elif type_name == 'multiple_choice' %}
+                                多选题
+                            {% else %}
+                                判断题
+                            {% endif %}
+                        </h4>
+                        <div class="type-accuracy">{{ stats.accuracy }}%</div>
+                        <div class="type-count">{{ stats.correct }} / {{ stats.total }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- 详细解析 -->
+            <div class="detailed-results">
+                <h3>📝 详细解析</h3>
+                <div class="filter-tabs">
+                    <button class="tab-btn active" data-filter="all">全部题目</button>
+                    <button class="tab-btn" data-filter="correct">正确题目</button>
+                    <button class="tab-btn" data-filter="incorrect">错误题目</button>
+                </div>
+                
+                <div class="results-container">
+                    {% for result in score_result.results %}
+                    <div class="result-card {{ 'correct' if result.is_correct else 'incorrect' }}" data-result-type="{{ 'correct' if result.is_correct else 'incorrect' }}">
+                        <div class="result-header">
+                            <div class="question-info">
+                                <span class="question-number">第 {{ result.question_id }} 题</span>
+                                <span class="question-type">
+                                    {% if result.question_type == 'single_choice' %}
+                                        单选题
+                                    {% elif result.question_type == 'multiple_choice' %}
+                                        多选题
+                                    {% else %}
+                                        判断题
+                                    {% endif %}
+                                </span>
+                                <span class="result-status">
+                                    {% if result.is_correct %}
+                                        ✅ 正确
+                                    {% else %}
+                                        ❌ 错误
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="score-info">
+                                <span class="earned-score">{{ result.earned_score }}</span> / 
+                                <span class="max-score">{{ result.max_score }}</span> 分
+                            </div>
+                        </div>
+                        
+                        <div class="question-content">
+                            <h4>{{ result.question }}</h4>
+                        </div>
+                        
+                        <div class="options-review">
+                            {% for option in result.options %}
+                            {% set option_letter = option.split('.')[0] %}
+                            <div class="option-item 
+                                {% if result.question_type == 'multiple_choice' %}
+                                    {% if option_letter in result.correct_answer %}
+                                        correct-option
+                                    {% endif %}
+                                    {% if result.user_answer and option_letter in result.user_answer %}
+                                        user-selected
+                                        {% if option_letter not in result.correct_answer %}
+                                            wrong-selection
+                                        {% endif %}
+                                    {% endif %}
+                                {% else %}
+                                    {% if option_letter == result.correct_answer %}
+                                        correct-option
+                                    {% endif %}
+                                    {% if result.user_answer == option_letter %}
+                                        user-selected
+                                        {% if option_letter != result.correct_answer %}
+                                            wrong-selection
+                                        {% endif %}
+                                    {% endif %}
+                                {% endif %}
+                            ">
+                                <span class="option-text">{{ option }}</span>
+                                <div class="option-indicators">
+                                    {% if result.question_type == 'multiple_choice' %}
+                                        {% if option_letter in result.correct_answer %}
+                                            <span class="indicator correct">✓</span>
+                                        {% endif %}
+                                        {% if result.user_answer and option_letter in result.user_answer %}
+                                            {% if option_letter in result.correct_answer %}
+                                                <span class="indicator user-correct">👤</span>
+                                            {% else %}
+                                                <span class="indicator user-wrong">👤</span>
+                                            {% endif %}
+                                        {% endif %}
+                                    {% else %}
+                                        {% if option_letter == result.correct_answer %}
+                                            <span class="indicator correct">✓</span>
+                                        {% endif %}
+                                        {% if result.user_answer == option_letter %}
+                                            {% if option_letter == result.correct_answer %}
+                                                <span class="indicator user-correct">👤</span>
+                                            {% else %}
+                                                <span class="indicator user-wrong">👤</span>
+                                            {% endif %}
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="answer-summary">
+                            <div class="answer-row">
+                                <span class="answer-label">您的答案：</span>
+                                <span class="user-answer">
+                                    {% if result.user_answer %}
+                                        {% if result.question_type == 'multiple_choice' %}
+                                            {{ result.user_answer | join(', ') }}
+                                        {% else %}
+                                            {{ result.user_answer }}
+                                        {% endif %}
+                                    {% else %}
+                                        未作答
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="answer-row">
+                                <span class="answer-label">正确答案：</span>
+                                <span class="correct-answer">
+                                    {% if result.question_type == 'multiple_choice' %}
+                                        {{ result.correct_answer | join(', ') }}
+                                    {% else %}
+                                        {{ result.correct_answer }}
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        {% if result.explanation %}
+                        <div class="explanation">
+                            <h5>💡 解析</h5>
+                            <p>{{ result.explanation }}</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="result-actions">
+                <a href="{{ url_for('upload_document') }}" class="btn btn-primary">
+                    🔄 重新开始
+                </a>
+                <button type="button" class="btn btn-secondary" id="printResult">
+                    🖨️ 打印结果
+                </button>
+                <a href="{{ url_for('restart') }}" class="btn btn-outline">
+                    🏠 返回首页
+                </a>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2024 智能题目生成系统</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 筛选功能
+            const filterTabs = document.querySelectorAll('.tab-btn');
+            const resultCards = document.querySelectorAll('.result-card');
+            
+            filterTabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // 更新活跃标签
+                    filterTabs.forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    const filter = this.dataset.filter;
+                    
+                    // 筛选结果卡片
+                    resultCards.forEach(card => {
+                        if (filter === 'all') {
+                            card.style.display = 'block';
+                        } else {
+                            const resultType = card.dataset.resultType;
+                            card.style.display = resultType === filter ? 'block' : 'none';
+                        }
+                    });
+                });
+            });
+            
+            // 打印功能
+            const printButton = document.getElementById('printResult');
+            if (printButton) {
+                printButton.addEventListener('click', function() {
+                    window.print();
+                });
+            }
+            
+            // 成绩圆环动画
+            const scoreCircle = document.querySelector('.score-circle');
+            if (scoreCircle) {
+                const percentage = parseFloat("{{ score_result.percentage }}") || 0;
+                
+                // 添加CSS变量用于动画
+                scoreCircle.style.setProperty('--percentage', percentage);
+                
+                // 延迟添加动画类
+                setTimeout(() => {
+                    scoreCircle.classList.add('animated');
+                }, 500);
+            }
+        });
+    </script>
+
+    <style>
+        @media print {
+            .header nav,
+            .result-actions,
+            .footer {
+                display: none;
+            }
+            
+            .container {
+                max-width: none;
+                margin: 0;
+                padding: 20px;
+            }
+            
+            .result-card {
+                break-inside: avoid;
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+</body>
+</html>

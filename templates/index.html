@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能题目生成系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <div>
+                    <h1>🎯 智能题目生成系统</h1>
+                    <p class="subtitle">基于文档内容自动生成单选题、多选题、判断题</p>
+                </div>
+                <div class="header-actions">
+                    {% if session.is_admin %}
+                        <span class="admin-badge">管理员: {{ session.admin_username }}</span>
+                        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">管理后台</a>
+                        <a href="{{ url_for('logout') }}" class="btn btn-outline">登出</a>
+                    {% else %}
+                        <a href="{{ url_for('login') }}" class="btn btn-outline">管理员登录</a>
+                    {% endif %}
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="welcome-section">
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">📄</div>
+                        <h3>文档上传</h3>
+                        <p>支持 TXT、PDF、DOCX 格式文档</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🤖</div>
+                        <h3>AI 生成题目</h3>
+                        <p>基于 DeepSeek AI 智能生成高质量题目</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📊</div>
+                        <h3>自动评分</h3>
+                        <p>即时评分并提供详细的答案解析</p>
+                    </div>
+                </div>
+
+                <div class="action-section">
+                    <h2>开始使用</h2>
+                    
+                    {% if documents %}
+                        <!-- 文档选择区域 -->
+                        <div class="document-selection">
+                            <h3>📚 选择已有文档生成题目</h3>
+                            <p>从以下已上传的文档中选择一个或多个作为题目生成的参考：</p>
+                            
+                            <div class="documents-grid" id="documentsGrid">
+                                {% for doc in documents %}
+                                <div class="document-item" data-filename="{{ doc.filename }}">
+                                    <div class="document-icon">📄</div>
+                                    <div class="document-info">
+                                        <div class="document-name">{{ doc.original_name }}</div>
+                                        <div class="document-size">{{ "%.1f KB"|format(doc.size / 1024) }}</div>
+                                    </div>
+                                    <input type="checkbox" class="document-checkbox" value="{{ doc.filename }}">
+                                </div>
+                                {% endfor %}
+                            </div>
+                            
+                            <div class="selection-actions">
+                                <button id="selectAllBtn" class="btn btn-outline">全选</button>
+                                <button id="clearSelectionBtn" class="btn btn-outline">清空</button>
+                                <button id="generateFromSelectionBtn" class="btn btn-primary" disabled>
+                                    🎯 生成题目 (<span id="selectedCount">0</span>个文档)
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="divider">
+                            <span>或者</span>
+                        </div>
+                    {% endif %}
+                    
+                    <!-- 上传新文档 -->
+                    <div class="upload-section">
+                        {% if session.is_admin %}
+                            <h3>📤 上传新文档</h3>
+                            <p>上传新的文档文件，让 AI 为您生成专业的测试题目</p>
+                            <a href="{{ url_for('upload_document') }}" class="btn btn-primary btn-large">
+                                📤 上传文档开始
+                            </a>
+                        {% else %}
+                            <h3>📤 上传文档功能</h3>
+                            <p>上传文档功能仅限管理员使用，请先登录管理员账户</p>
+                            <a href="{{ url_for('login') }}" class="btn btn-secondary btn-large">
+                                🔐 管理员登录
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h3>使用说明</h3>
+                    <ol class="steps-list">
+                        <li><strong>上传文档：</strong>选择您要生成题目的文档文件</li>
+                        <li><strong>配置题目：</strong>设置单选题、多选题、判断题的数量</li>
+                        <li><strong>生成题目：</strong>AI 将根据文档内容生成相应题目</li>
+                        <li><strong>在线答题：</strong>在网页上完成答题</li>
+                        <li><strong>查看结果：</strong>获得评分和详细的答案解析</li>
+                    </ol>
+                </div>
+
+                <div class="supported-formats">
+                    <h3>支持的文档格式</h3>
+                    <div class="format-tags">
+                        <span class="format-tag">📄 TXT</span>
+                        <span class="format-tag">📕 PDF</span>
+                        <span class="format-tag">📘 DOCX</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2024 智能题目生成系统 | 基于 DeepSeek AI 技术</p>
+        </footer>
+    </div>
+
+    <style>
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .admin-badge {
+            background: #28a745;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: bold;
+        }
+        
+        .btn-outline {
+            background: transparent;
+            border: 2px solid #007bff;
+            color: #007bff;
+        }
+        
+        .btn-outline:hover {
+            background: #007bff;
+            color: white;
+        }
+        
+        .document-selection {
+            background: #f8f9fa;
+            padding: 2rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+        
+        .documents-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+        
+        .document-item {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .document-item:hover {
+            border-color: #007bff;
+            box-shadow: 0 2px 8px rgba(0,123,255,0.1);
+        }
+        
+        .document-item.selected {
+            border-color: #007bff;
+            background: #e3f2fd;
+        }
+        
+        .document-icon {
+            font-size: 2rem;
+        }
+        
+        .document-info {
+            flex: 1;
+        }
+        
+        .document-name {
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+        }
+        
+        .document-size {
+            color: #666;
+            font-size: 0.875rem;
+        }
+        
+        .document-checkbox {
+            width: 20px;
+            height: 20px;
+        }
+        
+        .selection-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 1.5rem;
+        }
+        
+        .divider {
+            text-align: center;
+            margin: 2rem 0;
+            position: relative;
+        }
+        
+        .divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: #ddd;
+        }
+        
+        .divider span {
+            background: white;
+            padding: 0 1rem;
+            color: #666;
+        }
+        
+        .upload-section {
+            text-align: center;
+        }
+        
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .documents-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .selection-actions {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const checkboxes = document.querySelectorAll('.document-checkbox');
+            const documentItems = document.querySelectorAll('.document-item');
+            const selectAllBtn = document.getElementById('selectAllBtn');
+            const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+            const generateBtn = document.getElementById('generateFromSelectionBtn');
+            const selectedCountSpan = document.getElementById('selectedCount');
+            
+            function updateSelection() {
+                const selectedCount = document.querySelectorAll('.document-checkbox:checked').length;
+                selectedCountSpan.textContent = selectedCount;
+                generateBtn.disabled = selectedCount === 0;
+                
+                // 更新文档项的选中状态
+                documentItems.forEach(item => {
+                    const checkbox = item.querySelector('.document-checkbox');
+                    if (checkbox.checked) {
+                        item.classList.add('selected');
+                    } else {
+                        item.classList.remove('selected');
+                    }
+                });
+            }
+            
+            // 点击文档项切换选中状态
+            documentItems.forEach(item => {
+                item.addEventListener('click', function(e) {
+                    if (e.target.type !== 'checkbox') {
+                        const checkbox = this.querySelector('.document-checkbox');
+                        checkbox.checked = !checkbox.checked;
+                        updateSelection();
+                    }
+                });
+            });
+            
+            // 复选框变化事件
+            checkboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', updateSelection);
+            });
+            
+            // 全选按钮
+            if (selectAllBtn) {
+                selectAllBtn.addEventListener('click', function() {
+                    checkboxes.forEach(checkbox => {
+                        checkbox.checked = true;
+                    });
+                    updateSelection();
+                });
+            }
+            
+            // 清空选择按钮
+            if (clearSelectionBtn) {
+                clearSelectionBtn.addEventListener('click', function() {
+                    checkboxes.forEach(checkbox => {
+                        checkbox.checked = false;
+                    });
+                    updateSelection();
+                });
+            }
+            
+            // 生成题目按钮
+            if (generateBtn) {
+                generateBtn.addEventListener('click', function() {
+                    const selectedDocuments = Array.from(document.querySelectorAll('.document-checkbox:checked'))
+                        .map(checkbox => checkbox.value);
+                    
+                    if (selectedDocuments.length === 0) {
+                        alert('请至少选择一个文档');
+                        return;
+                    }
+                    
+                    // 显示加载状态
+                    this.disabled = true;
+                    this.innerHTML = '🔄 处理中...';
+                    
+                    // 发送选择的文档到后端
+                    fetch('/select_documents', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            selected_documents: selectedDocuments
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // 跳转到题目配置页面
+                            window.location.href = '/config';
+                        } else {
+                            alert('处理失败: ' + data.error);
+                            this.disabled = false;
+                            this.innerHTML = '🎯 生成题目 (<span id="selectedCount">' + selectedDocuments.length + '</span>个文档)';
+                        }
+                    })
+                    .catch(error => {
+                        alert('处理失败: ' + error);
+                        this.disabled = false;
+                        this.innerHTML = '🎯 生成题目 (<span id="selectedCount">' + selectedDocuments.length + '</span>个文档)';
+                    });
+                });
+            }
+        });
+    </script>
+</body>
+</html>

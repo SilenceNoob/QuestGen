@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>上传文档 - 智能题目生成系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .header {
+            margin-bottom: 2rem;
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+            font-size: 2.5rem;
+        }
+        
+        .breadcrumb {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+        
+        .breadcrumb a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+        
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        .admin-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+            transform: translateY(-1px);
+        }
+        
+        .btn-outline {
+            background: transparent;
+            color: #6c757d;
+            border: 1px solid #6c757d;
+        }
+        
+        .btn-outline:hover {
+            background: #6c757d;
+            color: white;
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <div>
+                    <h1 id="pageTitle">📤 上传文档</h1>
+                    <nav class="breadcrumb">
+                        <a href="{{ url_for('index') }}">首页</a> > <span id="breadcrumbText">上传文档</span>
+                    </nav>
+                </div>
+                <div class="header-actions">
+                    {% if session.is_admin %}
+                        <span class="admin-badge">管理员: {{ session.admin_username }}</span>
+                        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">管理后台</a>
+                        <a href="{{ url_for('logout') }}" class="btn btn-outline">登出</a>
+                    {% endif %}
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="upload-section">
+                <div class="upload-card">
+                    <h2>选择文档文件</h2>
+                    <p>请上传您要生成题目的文档，支持 TXT、PDF、DOCX、MD 格式</p>
+                    
+                    <form id="uploadForm" enctype="multipart/form-data">
+                        <div class="file-upload-area" id="fileUploadArea">
+                            <div class="upload-icon">📁</div>
+                            <p class="upload-text">点击选择文件或拖拽文件到此处</p>
+                            <p class="upload-hint">支持 TXT、PDF、DOCX、MD 格式，最大 16MB</p>
+                            <input type="file" id="documentFile" name="document" accept=".txt,.pdf,.docx,.md" style="display: none;">
+                        </div>
+                        
+                        <div class="file-info" id="fileInfo" style="display: none;">
+                            <div class="file-details">
+                                <span class="file-name" id="fileName"></span>
+                                <span class="file-size" id="fileSize"></span>
+                            </div>
+                            <button type="button" class="btn-remove" id="removeFile">✕</button>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary" id="uploadBtn" disabled>
+                            <span class="btn-text">上传文档</span>
+                            <span class="loading-spinner" style="display: none;">⏳ 上传中...</span>
+                        </button>
+                    </form>
+                </div>
+
+            <div class="tips-section">
+                <h3>💡 使用提示</h3>
+                <ul class="tips-list">
+                    <li>支持上传 TXT、PDF、DOCX、MD 格式的文档</li>
+                    <li>文件大小不能超过 16MB</li>
+                    <li>上传成功后，可在首页选择文档生成题目</li>
+                    <li>同名文件会提示是否覆盖</li>
+                </ul>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2024 智能题目生成系统</p>
+        </footer>
+    </div>
+
+    <!-- 消息提示 -->
+    <div class="message" id="message" style="display: none;">
+        <span class="message-text" id="messageText"></span>
+        <button class="message-close" id="messageClose">✕</button>
+    </div>
+
+    <!-- 覆盖确认对话框 -->
+    <div class="modal-overlay" id="overwriteModal" style="display: none;">
+        <div class="modal-content">
+            <h3>⚠️ 文件已存在</h3>
+            <p id="overwriteMessage"></p>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" id="cancelOverwrite">取消</button>
+                <button class="btn btn-primary" id="confirmOverwrite">覆盖</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 文件上传和题目生成逻辑
+        document.addEventListener('DOMContentLoaded', function() {
+            const fileUploadArea = document.getElementById('fileUploadArea');
+            const documentFile = document.getElementById('documentFile');
+            const fileInfo = document.getElementById('fileInfo');
+            const fileName = document.getElementById('fileName');
+            const fileSize = document.getElementById('fileSize');
+            const removeFile = document.getElementById('removeFile');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const uploadForm = document.getElementById('uploadForm');
+            
+
+            
+            // 文件选择
+            fileUploadArea.addEventListener('click', () => documentFile.click());
+            
+            // 拖拽上传
+            fileUploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                fileUploadArea.classList.add('drag-over');
+            });
+            
+            fileUploadArea.addEventListener('dragleave', () => {
+                fileUploadArea.classList.remove('drag-over');
+            });
+            
+            fileUploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                fileUploadArea.classList.remove('drag-over');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    // 只处理第一个文件
+                    const file = files[0];
+                    
+                    // 检查文件类型
+                    const allowedTypes = ['.txt', '.docx', '.pdf', '.md'];
+                    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+                    
+                    if (!allowedTypes.includes(fileExtension)) {
+                        showMessage('不支持的文件格式，请选择：TXT、DOCX、PDF、MD', 'error');
+                        return;
+                    }
+                    
+                    // 检查文件大小（16MB限制）
+                    if (file.size > 16 * 1024 * 1024) {
+                        showMessage('文件大小不能超过16MB', 'error');
+                        return;
+                    }
+                    
+                    documentFile.files = files;
+                    handleFileSelect();
+                }
+            });
+            
+            documentFile.addEventListener('change', handleFileSelect);
+            
+            function handleFileSelect() {
+                const file = documentFile.files[0];
+                if (file) {
+                    // 检查文件类型
+                    const allowedTypes = ['.txt', '.docx', '.pdf', '.md'];
+                    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+                    
+                    if (!allowedTypes.includes(fileExtension)) {
+                        showMessage('不支持的文件格式，请选择：TXT、DOCX、PDF、MD', 'error');
+                        documentFile.value = '';
+                        fileInfo.style.display = 'none';
+                        uploadBtn.disabled = true;
+                        return;
+                    }
+                    
+                    // 检查文件大小（16MB限制）
+                    if (file.size > 16 * 1024 * 1024) {
+                        showMessage('文件大小不能超过16MB', 'error');
+                        documentFile.value = '';
+                        fileInfo.style.display = 'none';
+                        uploadBtn.disabled = true;
+                        return;
+                    }
+                    
+                    fileName.textContent = file.name;
+                    fileSize.textContent = formatFileSize(file.size);
+                    fileInfo.style.display = 'flex';
+                    uploadBtn.disabled = false;
+                } else {
+                    fileInfo.style.display = 'none';
+                    uploadBtn.disabled = true;
+                }
+            }
+            
+            removeFile.addEventListener('click', () => {
+                documentFile.value = '';
+                fileInfo.style.display = 'none';
+                uploadBtn.disabled = true;
+            });
+            
+            // 文件上传
+            uploadForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await uploadFile(false);
+            });
+            
+            async function uploadFile(forceOverwrite = false) {
+                const formData = new FormData();
+                formData.append('document', documentFile.files[0]);
+                if (forceOverwrite) {
+                    formData.append('force_overwrite', 'true');
+                }
+                
+                setLoading(uploadBtn, true);
+                
+                try {
+                    const response = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        showMessage(result.message || '文档上传成功！', 'success');
+                        // 清空文件选择
+                        documentFile.value = '';
+                        fileInfo.style.display = 'none';
+                        uploadBtn.disabled = true;
+                    } else if (result.error === 'file_exists') {
+                        // 显示覆盖确认对话框
+                        showOverwriteConfirm(result.message, result.filename);
+                    } else {
+                        showMessage(result.error, 'error');
+                    }
+                } catch (error) {
+                    showMessage('上传失败，请重试', 'error');
+                } finally {
+                    setLoading(uploadBtn, false);
+                }
+            }
+
+            
+            // 工具函数
+            function formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+            
+            function setLoading(button, loading) {
+                const text = button.querySelector('.btn-text');
+                const spinner = button.querySelector('.loading-spinner');
+                
+                if (loading) {
+                    text.style.display = 'none';
+                    spinner.style.display = 'inline';
+                    button.disabled = true;
+                } else {
+                    text.style.display = 'inline';
+                    spinner.style.display = 'none';
+                    button.disabled = false;
+                }
+            }
+            
+            function showMessage(text, type) {
+                const message = document.getElementById('message');
+                const messageText = document.getElementById('messageText');
+                
+                messageText.textContent = text;
+                message.className = `message ${type}`;
+                message.style.display = 'flex';
+                
+                setTimeout(() => {
+                    message.style.display = 'none';
+                }, 5000);
+            }
+            
+            document.getElementById('messageClose').addEventListener('click', () => {
+                document.getElementById('message').style.display = 'none';
+            });
+            
+            // 覆盖确认对话框处理
+            function showOverwriteConfirm(message, filename) {
+                const modal = document.getElementById('overwriteModal');
+                const messageElement = document.getElementById('overwriteMessage');
+                messageElement.textContent = message;
+                modal.style.display = 'flex';
+                
+                // 重置按钮事件监听器
+                const confirmBtn = document.getElementById('confirmOverwrite');
+                const cancelBtn = document.getElementById('cancelOverwrite');
+                
+                // 移除旧的事件监听器
+                const newConfirmBtn = confirmBtn.cloneNode(true);
+                const newCancelBtn = cancelBtn.cloneNode(true);
+                confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+                cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+                
+                // 添加新的事件监听器
+                newConfirmBtn.addEventListener('click', () => {
+                    modal.style.display = 'none';
+                    uploadFile(true); // 强制覆盖
+                });
+                
+                newCancelBtn.addEventListener('click', () => {
+                    modal.style.display = 'none';
+                    setLoading(uploadBtn, false);
+                });
+            }
+        });
+    </script>
+</body>
+</html>

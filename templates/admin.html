@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理员仪表板 - 智能题目生成器</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>管理员仪表板</h1>
+            <div class="admin-info">
+                <span>欢迎，{{ session.admin_username }}</span>
+                <a href="{{ url_for('logout') }}" class="btn btn-secondary">登出</a>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <!-- 显示消息 -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="message {{ category }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <div class="admin-actions">
+                <h2>管理功能</h2>
+                <div class="action-buttons">
+                    <a href="{{ url_for('upload_document') }}" class="btn btn-primary">
+                        <i class="icon">📄</i>
+                        上传新文档
+                    </a>
+                    <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                        <i class="icon">🏠</i>
+                        返回首页
+                    </a>
+                </div>
+            </div>
+
+            <div class="documents-section">
+                <h2>文档管理</h2>
+                <div class="documents-stats">
+                    <p>当前共有 <strong>{{ documents|length }}</strong> 个文档</p>
+                </div>
+                
+                {% if documents %}
+                    <div class="documents-list">
+                        <table class="documents-table">
+                            <thead>
+                                <tr>
+                                    <th>文档名称</th>
+                                    <th>原始名称</th>
+                                    <th>文件大小</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for doc in documents %}
+                                <tr>
+                                    <td>{{ doc.filename }}</td>
+                                    <td>{{ doc.original_name }}</td>
+                                    <td>{{ "%.1f KB"|format(doc.size / 1024) }}</td>
+                                    <td class="action-cell">
+                                        <button class="btn btn-danger btn-sm" onclick="deleteDocument('{{ doc.filename }}')">删除</button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="no-documents">
+                        <p>暂无文档，请先上传文档。</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        
+        .admin-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .admin-actions {
+            margin-bottom: 2rem;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .action-buttons .btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .documents-section {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .documents-stats {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        
+        .documents-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        
+        .documents-table th,
+        .documents-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .documents-table th {
+            background: #f8f9fa;
+            font-weight: bold;
+        }
+        
+        .documents-table tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        .no-documents {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+        
+        .icon {
+            font-size: 1.2em;
+        }
+    </style>
+
+    <script>
+        function deleteDocument(filename) {
+            console.log('删除文档:', filename);
+            if (confirm('确定要删除文档 "' + filename + '" 吗？此操作不可恢复。')) {
+                console.log('用户确认删除');
+                fetch('/admin/delete_document', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({filename: filename})
+                })
+                .then(response => {
+                    console.log('响应状态:', response.status);
+                    if (!response.ok) {
+                        throw new Error('HTTP ' + response.status);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('响应数据:', data);
+                    if (data.success) {
+                        alert('删除成功');
+                        location.reload();
+                    } else {
+                        alert('删除失败: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('删除错误:', error);
+                    alert('删除失败: ' + error.message);
+                });
+            }
+        }
+    </script>
+</body>
+</html>

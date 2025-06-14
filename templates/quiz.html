@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线答题 - 智能题目生成系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>📝 在线答题</h1>
+            <nav class="breadcrumb">
+                <a href="{{ url_for('index') }}">首页</a> > 
+                <a href="{{ url_for('upload_document') }}">上传文档</a> > 在线答题
+            </nav>
+        </header>
+
+        <main class="main-content">
+            <div class="quiz-info">
+                <div class="document-summary">
+                    <h3>📄 文档信息</h3>
+                    <p><strong>文件名：</strong>{{ document_info.filename }}</p>
+                    <p><strong>字数：</strong>{{ document_info.word_count }} 字</p>
+                </div>
+                
+                <div class="quiz-summary">
+                    <h3>📊 题目统计</h3>
+                    <div class="stats-grid">
+                        {% set single_count = questions|selectattr('type', 'equalto', 'single_choice')|list|length %}
+                        {% set multiple_count = questions|selectattr('type', 'equalto', 'multiple_choice')|list|length %}
+                        {% set tf_count = questions|selectattr('type', 'equalto', 'true_false')|list|length %}
+                        
+                        <div class="stat-item">
+                            <span class="stat-label">单选题：</span>
+                            <span class="stat-value">{{ single_count }} 道</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">多选题：</span>
+                            <span class="stat-value">{{ multiple_count }} 道</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">判断题：</span>
+                            <span class="stat-value">{{ tf_count }} 道</span>
+                        </div>
+                        <div class="stat-item total">
+                            <span class="stat-label">总计：</span>
+                            <span class="stat-value">{{ questions|length }} 道</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <form id="quizForm" class="quiz-form">
+                <div class="questions-container">
+                    {% for question in questions %}
+                    <div class="question-card" data-question-id="{{ question.id }}">
+                        <div class="question-header">
+                            <span class="question-number">第 {{ question.id }} 题</span>
+                            <span class="question-type">
+                                {% if question.type == 'single_choice' %}
+                                    单选题
+                                {% elif question.type == 'multiple_choice' %}
+                                    多选题
+                                {% else %}
+                                    判断题
+                                {% endif %}
+                            </span>
+                        </div>
+                        
+                        <div class="question-content">
+                            <h4>{{ question.question }}</h4>
+                        </div>
+                        
+                        <div class="options-container">
+                            {% for option in question.options %}
+                            <label class="option-label">
+                                {% if question.type == 'multiple_choice' %}
+                                    <input type="checkbox" 
+                                           name="question_{{ question.id }}" 
+                                           value="{{ option.split('.')[0] }}">
+                                {% else %}
+                                    <input type="radio" 
+                                           name="question_{{ question.id }}" 
+                                           value="{{ option.split('.')[0] }}">
+                                {% endif %}
+                                <span class="option-text">{{ option }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="question-progress">
+                            <div class="progress-indicator" id="progress_{{ question.id }}">未作答</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="quiz-actions">
+                    <div class="progress-summary">
+                        <span id="answeredCount">0</span> / {{ questions|length }} 题已完成
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="action-buttons">
+                        <button type="button" class="btn btn-secondary" id="saveProgress">
+                            💾 保存进度
+                        </button>
+                        <button type="submit" class="btn btn-primary" id="submitQuiz">
+                            <span class="btn-text">📤 提交答案</span>
+                            <span class="loading-spinner" style="display: none;">⏳ 评分中...</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2024 智能题目生成系统</p>
+        </footer>
+    </div>
+
+    <!-- 消息提示 -->
+    <div class="message" id="message" style="display: none;">
+        <span class="message-text" id="messageText"></span>
+        <button class="message-close" id="messageClose">✕</button>
+    </div>
+
+    <!-- 确认对话框 -->
+    <div class="modal" id="confirmModal" style="display: none;">
+        <div class="modal-content">
+            <h3>确认提交</h3>
+            <p id="confirmMessage"></p>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="cancelSubmit">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmSubmit">确认提交</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const quizForm = document.getElementById('quizForm');
+            const submitBtn = document.getElementById('submitQuiz');
+            const saveBtn = document.getElementById('saveProgress');
+            const answeredCount = document.getElementById('answeredCount');
+            const progressFill = document.getElementById('progressFill');
+            const confirmModal = document.getElementById('confirmModal');
+            const confirmMessage = document.getElementById('confirmMessage');
+            const totalQuestions = {{ questions|length }};
+            
+            // 监听答案变化
+            quizForm.addEventListener('change', updateProgress);
+            
+            // 更新进度
+            function updateProgress() {
+                let answered = 0;
+                
+                for (let i = 1; i <= totalQuestions; i++) {
+                    const questionInputs = document.querySelectorAll(`input[name="question_${i}"]`);
+                    const progressIndicator = document.getElementById(`progress_${i}`);
+                    
+                    let hasAnswer = false;
+                    questionInputs.forEach(input => {
+                        if (input.checked) {
+                            hasAnswer = true;
+                        }
+                    });
+                    
+                    if (hasAnswer) {
+                        answered++;
+                        progressIndicator.textContent = '已完成';
+                        progressIndicator.className = 'progress-indicator completed';
+                    } else {
+                        progressIndicator.textContent = '未作答';
+                        progressIndicator.className = 'progress-indicator';
+                    }
+                }
+                
+                answeredCount.textContent = answered;
+                const percentage = (answered / totalQuestions) * 100;
+                progressFill.style.width = percentage + '%';
+            }
+            
+            // 保存进度
+            saveBtn.addEventListener('click', function() {
+                const answers = collectAnswers();
+                localStorage.setItem('quiz_progress', JSON.stringify(answers));
+                showMessage('进度已保存', 'success');
+            });
+            
+            // 加载保存的进度
+            function loadProgress() {
+                const saved = localStorage.getItem('quiz_progress');
+                if (saved) {
+                    try {
+                        const answers = JSON.parse(saved);
+                        restoreAnswers(answers);
+                        updateProgress();
+                        showMessage('已恢复上次保存的进度', 'info');
+                    } catch (e) {
+                        console.error('Failed to load progress:', e);
+                    }
+                }
+            }
+            
+            // 收集答案
+            function collectAnswers() {
+                const answers = {};
+                
+                for (let i = 1; i <= totalQuestions; i++) {
+                    const questionInputs = document.querySelectorAll(`input[name="question_${i}"]`);
+                    const questionType = getQuestionType(i);
+                    
+                    if (questionType === 'multiple_choice') {
+                        const selected = [];
+                        questionInputs.forEach(input => {
+                            if (input.checked) {
+                                selected.push(input.value);
+                            }
+                        });
+                        if (selected.length > 0) {
+                            answers[i] = selected;
+                        }
+                    } else {
+                        questionInputs.forEach(input => {
+                            if (input.checked) {
+                                answers[i] = input.value;
+                            }
+                        });
+                    }
+                }
+                
+                return answers;
+            }
+            
+            // 恢复答案
+            function restoreAnswers(answers) {
+                Object.keys(answers).forEach(questionId => {
+                    const answer = answers[questionId];
+                    const questionInputs = document.querySelectorAll(`input[name="question_${questionId}"]`);
+                    
+                    if (Array.isArray(answer)) {
+                        // 多选题
+                        questionInputs.forEach(input => {
+                            input.checked = answer.includes(input.value);
+                        });
+                    } else {
+                        // 单选题和判断题
+                        questionInputs.forEach(input => {
+                            input.checked = input.value === answer;
+                        });
+                    }
+                });
+            }
+            
+            // 获取题目类型
+            function getQuestionType(questionId) {
+                const questionCard = document.querySelector(`[data-question-id="${questionId}"]`);
+                const typeSpan = questionCard.querySelector('.question-type');
+                const typeText = typeSpan.textContent.trim();
+                
+                if (typeText === '多选题') return 'multiple_choice';
+                if (typeText === '判断题') return 'true_false';
+                return 'single_choice';
+            }
+            
+            // 提交答案
+            quizForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const answers = collectAnswers();
+                const answeredQuestions = Object.keys(answers).length;
+                const unansweredCount = totalQuestions - answeredQuestions;
+                
+                if (unansweredCount > 0) {
+                    confirmMessage.textContent = `还有 ${unansweredCount} 道题未作答，确定要提交吗？`;
+                } else {
+                    confirmMessage.textContent = '确定要提交答案吗？提交后将无法修改。';
+                }
+                
+                confirmModal.style.display = 'flex';
+                
+                document.getElementById('confirmSubmit').onclick = function() {
+                    confirmModal.style.display = 'none';
+                    submitAnswers(answers);
+                };
+                
+                document.getElementById('cancelSubmit').onclick = function() {
+                    confirmModal.style.display = 'none';
+                };
+            });
+            
+            // 提交答案到服务器
+            async function submitAnswers(answers) {
+                setLoading(submitBtn, true);
+                
+                try {
+                    const response = await fetch('/submit_answers', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ answers: answers })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        // 清除保存的进度
+                        localStorage.removeItem('quiz_progress');
+                        showMessage('提交成功！正在跳转到结果页面...', 'success');
+                        setTimeout(() => {
+                            window.location.href = '/result';
+                        }, 1500);
+                    } else {
+                        showMessage(result.error, 'error');
+                    }
+                } catch (error) {
+                    showMessage('提交失败，请重试', 'error');
+                } finally {
+                    setLoading(submitBtn, false);
+                }
+            }
+            
+            // 工具函数
+            function setLoading(button, loading) {
+                const text = button.querySelector('.btn-text');
+                const spinner = button.querySelector('.loading-spinner');
+                
+                if (loading) {
+                    text.style.display = 'none';
+                    spinner.style.display = 'inline';
+                    button.disabled = true;
+                } else {
+                    text.style.display = 'inline';
+                    spinner.style.display = 'none';
+                    button.disabled = false;
+                }
+            }
+            
+            function showMessage(text, type) {
+                const message = document.getElementById('message');
+                const messageText = document.getElementById('messageText');
+                
+                messageText.textContent = text;
+                message.className = `message ${type}`;
+                message.style.display = 'flex';
+                
+                setTimeout(() => {
+                    message.style.display = 'none';
+                }, 5000);
+            }
+            
+            document.getElementById('messageClose').addEventListener('click', () => {
+                document.getElementById('message').style.display = 'none';
+            });
+            
+            // 页面加载时恢复进度
+            loadProgress();
+            updateProgress();
+        });
+    </script>
+</body>
+</html>
