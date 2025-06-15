@@ -102,6 +102,7 @@
 
                 <div class="info-section">
                     <h3>使用说明</h3>
+                    {% if session.is_admin %}
                     <ol class="steps-list">
                         <li><strong>上传文档：</strong>选择您要生成题目的文档文件</li>
                         <li><strong>配置题目：</strong>设置单选题、多选题、判断题的数量</li>
@@ -109,6 +110,15 @@
                         <li><strong>在线答题：</strong>在网页上完成答题</li>
                         <li><strong>查看结果：</strong>获得评分和详细的答案解析</li>
                     </ol>
+                    {% else %}
+                    <ol class="steps-list">
+                        <li><strong>选择文档：</strong>从已有文档中选择一个或多个文档</li>
+                        <li><strong>生成题目：</strong>AI 将自动生成题目（5道单选题、3道多选题、2道判断题）</li>
+                        <li><strong>在线答题：</strong>在网页上完成答题</li>
+                        <li><strong>查看结果：</strong>获得评分和详细的答案解析</li>
+                    </ol>
+                    <p class="note">💡 如需自定义题目数量，请使用管理员账户登录</p>
+                    {% endif %}
                 </div>
 
                 <div class="supported-formats">
@@ -349,6 +359,7 @@
                     this.innerHTML = '🔄 处理中...';
                     
                     // 发送选择的文档到后端
+                    const button = this; // 保存按钮引用
                     fetch('/select_documents', {
                         method: 'POST',
                         headers: {
@@ -361,18 +372,48 @@
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            // 跳转到题目配置页面
-                            window.location.href = '/config';
+                            // 根据用户类型执行不同操作
+                            if ({{ 'true' if session.is_admin else 'false' }}) {
+                                // 管理员：跳转到配置页面
+                                window.location.href = '/config';
+                            } else {
+                                // 普通用户：直接生成题目（使用全局配置）
+                                button.disabled = true;
+                                button.innerHTML = '<span class="loading-spinner">⟳</span> 生成中...';
+                                
+                                fetch('/generate_questions', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({})
+                                })
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.success) {
+                                        window.location.href = '/quiz';
+                                    } else {
+                                        alert('生成题目失败: ' + data.error);
+                                        button.disabled = false;
+                                        button.innerHTML = '🎯 生成题目';
+                                    }
+                                })
+                                .catch(error => {
+                                    alert('生成题目失败: ' + error);
+                                    button.disabled = false;
+                                    button.innerHTML = '🎯 生成题目';
+                                });
+                            }
                         } else {
                             alert('处理失败: ' + data.error);
-                            this.disabled = false;
-                            this.innerHTML = '🎯 生成题目 (<span id="selectedCount">' + selectedDocuments.length + '</span>个文档)';
+                            button.disabled = false;
+                            button.innerHTML = '🎯 生成题目';
                         }
                     })
                     .catch(error => {
                         alert('处理失败: ' + error);
-                        this.disabled = false;
-                        this.innerHTML = '🎯 生成题目 (<span id="selectedCount">' + selectedDocuments.length + '</span>个文档)';
+                        button.disabled = false;
+                        button.innerHTML = '🎯 生成题目';
                     });
                 });
             }

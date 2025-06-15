@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>题目数量配置 - 智能题目生成系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>⚙️ 题目数量配置</h1>
+            <nav class="breadcrumb">
+                <a href="{{ url_for('index') }}">首页</a> > 
+                <a href="{{ url_for('admin_dashboard') }}">管理后台</a> > 
+                题目数量配置
+            </nav>
+        </header>
+
+        <main class="main-content">
+            <!-- 显示消息 -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="message {{ category }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <div class="config-section">
+                <h3>📝 全局题目数量设置</h3>
+                <p class="config-description">
+                    这里设置的题目数量将作为所有用户生成题目时的默认配置。
+                    普通用户将直接使用这些设置生成题目，无需额外配置。
+                </p>
+                
+                <form id="questionConfigForm" class="config-form">
+                    <div class="question-type">
+                        <label for="singleChoice">单选题数量：</label>
+                        <input type="number" id="singleChoice" name="single_choice" min="0" max="20" value="{{ config.single_choice }}">
+                        <span class="question-desc">每题4个选项，只有1个正确答案</span>
+                    </div>
+                    
+                    <div class="question-type">
+                        <label for="multipleChoice">多选题数量：</label>
+                        <input type="number" id="multipleChoice" name="multiple_choice" min="0" max="10" value="{{ config.multiple_choice }}">
+                        <span class="question-desc">每题4个选项，可能有多个正确答案</span>
+                    </div>
+                    
+                    <div class="question-type">
+                        <label for="trueFalse">判断题数量：</label>
+                        <input type="number" id="trueFalse" name="true_false" min="0" max="10" value="{{ config.true_false }}">
+                        <span class="question-desc">判断对错，只有正确或错误两个选项</span>
+                    </div>
+                    
+                    <div class="question-type">
+                        <label for="thinking">思考题数量：</label>
+                        <input type="number" id="thinking" name="thinking" min="0" max="5" value="{{ config.thinking }}">
+                        <span class="question-desc">开放性问题，需要文字回答</span>
+                    </div>
+                    
+                    <div class="total-count">
+                        <span>总题目数量：<strong id="totalCount">{{ config.single_choice + config.multiple_choice + config.true_false + config.thinking }}</strong> 道</span>
+                        <span class="limit-note">(最多20道题)</span>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" id="saveConfigBtn">
+                            <span class="btn-text">💾 保存配置</span>
+                        </button>
+                        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+                            ↩️ 返回管理后台
+                        </a>
+                    </div>
+                </form>
+            </div>
+
+            <div class="current-config">
+                <h3>📊 当前配置</h3>
+                <div class="config-summary">
+                    <div class="config-item">
+                        <span class="config-label">单选题：</span>
+                        <span class="config-value">{{ config.single_choice }} 道</span>
+                    </div>
+                    <div class="config-item">
+                        <span class="config-label">多选题：</span>
+                        <span class="config-value">{{ config.multiple_choice }} 道</span>
+                    </div>
+                    <div class="config-item">
+                        <span class="config-label">判断题：</span>
+                        <span class="config-value">{{ config.true_false }} 道</span>
+                    </div>
+                    <div class="config-item">
+                        <span class="config-label">思考题：</span>
+                        <span class="config-value">{{ config.thinking }} 道</span>
+                    </div>
+                    <div class="config-item total">
+                        <span class="config-label">总计：</span>
+                        <span class="config-value">{{ config.single_choice + config.multiple_choice + config.true_false + config.thinking }} 道</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('questionConfigForm');
+            const inputs = form.querySelectorAll('input[type="number"]');
+            const totalCountElement = document.getElementById('totalCount');
+            const saveBtn = document.getElementById('saveConfigBtn');
+            
+            // 更新总数
+            function updateTotalCount() {
+                let total = 0;
+                inputs.forEach(input => {
+                    total += parseInt(input.value) || 0;
+                });
+                totalCountElement.textContent = total;
+                
+                // 检查是否超过限制
+                if (total > 20) {
+                    totalCountElement.style.color = '#e53e3e';
+                    saveBtn.disabled = true;
+                } else if (total === 0) {
+                    totalCountElement.style.color = '#e53e3e';
+                    saveBtn.disabled = true;
+                } else {
+                    totalCountElement.style.color = '#38a169';
+                    saveBtn.disabled = false;
+                }
+            }
+            
+            // 监听输入变化
+            inputs.forEach(input => {
+                input.addEventListener('input', updateTotalCount);
+            });
+            
+            // 初始化总数
+            updateTotalCount();
+            
+            // 表单提交
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(form);
+                const config = {
+                    single_choice: parseInt(formData.get('single_choice')) || 0,
+                    multiple_choice: parseInt(formData.get('multiple_choice')) || 0,
+                    true_false: parseInt(formData.get('true_false')) || 0,
+                    thinking: parseInt(formData.get('thinking')) || 0
+                };
+                
+                // 验证总数
+                const total = Object.values(config).reduce((sum, val) => sum + val, 0);
+                if (total === 0) {
+                    alert('请至少设置一种题型的数量');
+                    return;
+                }
+                if (total > 20) {
+                    alert('题目总数不能超过20道');
+                    return;
+                }
+                
+                // 显示保存状态
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<span class="loading-spinner">⟳</span> 保存中...';
+                
+                // 发送配置到后端
+                fetch('/save_question_config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(config)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('配置保存成功！');
+                        window.location.reload();
+                    } else {
+                        alert('保存失败: ' + data.error);
+                        saveBtn.disabled = false;
+                        saveBtn.innerHTML = '<span class="btn-text">💾 保存配置</span>';
+                    }
+                })
+                .catch(error => {
+                    alert('保存失败: ' + error);
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<span class="btn-text">💾 保存配置</span>';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

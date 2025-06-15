@@ -15,6 +15,37 @@ config_name = os.environ.get('FLASK_CONFIG') or 'default'
 app.config.from_object(config[config_name])
 config[config_name].init_app(app)
 
+# 全局题目配置文件路径
+QUESTION_CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'question_config.json')
+
+# 默认题目配置
+DEFAULT_QUESTION_CONFIG = {
+    'single_choice': 5,
+    'multiple_choice': 3,
+    'true_false': 2,
+    'thinking': 0
+}
+
+def load_question_config():
+    """加载全局题目配置"""
+    try:
+        if os.path.exists(QUESTION_CONFIG_FILE):
+            with open(QUESTION_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"加载题目配置失败: {e}")
+    return DEFAULT_QUESTION_CONFIG.copy()
+
+def save_question_config(config_data):
+    """保存全局题目配置"""
+    try:
+        with open(QUESTION_CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(config_data, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"保存题目配置失败: {e}")
+        return False
+
 # 初始化组件
 doc_processor = DocumentProcessor(app.config['UPLOAD_FOLDER'])
 question_generator = QuestionGenerator(
@@ -216,24 +247,15 @@ def generate_questions():
     if not session_id or session_id not in session_data:
         return jsonify({'success': False, 'error': '会话已过期，请重新选择文档或上传文档'})
     
-    data = request.get_json()
-    if not data:
-        return jsonify({'success': False, 'error': '请求数据格式错误'})
-    
-    # 获取题目配置
-    question_config = {
-        'single_choice': data.get('single_choice', 5),
-        'multiple_choice': data.get('multiple_choice', 3),
-        'true_false': data.get('true_false', 2),
-        'thinking': data.get('thinking', 0)
-    }
+    # 使用全局题目配置
+    question_config = load_question_config()
     
     # 验证配置
     total_questions = sum(question_config.values())
     if total_questions == 0:
-        return jsonify({'success': False, 'error': '请至少选择一种题型'})
+        return jsonify({'success': False, 'error': '题目配置错误，请联系管理员设置题目数量'})
     if total_questions > 20:
-        return jsonify({'success': False, 'error': '题目总数不能超过20道'})
+        return jsonify({'success': False, 'error': '题目配置错误，总数超过20道，请联系管理员调整'})
     
     # 生成题目
     document_content = session_data[session_id]['document_content']
@@ -249,7 +271,7 @@ def generate_questions():
             if count > 0 and type_counter.get(qtype, 0) < count:
                 missing_types.append(qtype)
         if missing_types:
-            return jsonify({'success': False, 'error': f'题目生成异常，以下题型数量不足：{','.join(missing_types)}，请重试或减少题目数量'})
+            return jsonify({'success': False, 'error': f'题目生成异常，以下题型数量不足：{','.join(missing_types)}，请重试或联系管理员减少题目数量'})
         # 存储生成的题目
         session_data[session_id]['questions'] = questions
         session_data[session_id]['question_config'] = question_config
@@ -375,7 +397,7 @@ def restart():
     
     return redirect(url_for('index'))
 
-@app.route('/api/session_status')
+@app.route('/session_status')
 def session_status():
     """检查会话状态"""
     session_id = session.get('session_id')
@@ -391,6 +413,53 @@ def session_status():
     }
     
     return jsonify(status)
+
+@app.route('/question_config')
+@admin_required
+def question_config():
+    """题目配置页面（仅管理员）"""
+    config = load_question_config()
+    return render_template('question_config.html', config=config)
+
+@app.route('/save_question_config', methods=['POST'])
+@admin_required
+def save_question_config_route():
+    """保存题目配置（仅管理员）"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': '请求数据格式错误'})
+        
+        # 验证配置数据
+        config = {
+            'single_choice': int(data.get('single_choice', 0)),
+            'multiple_choice': int(data.get('multiple_choice', 0)),
+            'true_false': int(data.get('true_false', 0)),
+            'thinking': int(data.get('thinking', 0))
+        }
+        
+        # 验证数值范围
+        for key, value in config.items():
+            if value < 0 or value > 20:
+                return jsonify({'success': False, 'error': f'{key} 数量必须在0-20之间'})
+        
+        # 验证总数
+        total = sum(config.values())
+        if total == 0:
+            return jsonify({'success': False, 'error': '请至少设置一种题型的数量'})
+        if total > 20:
+            return jsonify({'success': False, 'error': '题目总数不能超过20道'})
+        
+        # 保存配置
+        if save_question_config(config):
+            return jsonify({'success': True, 'message': '配置保存成功'})
+        else:
+            return jsonify({'success': False, 'error': '配置保存失败'})
+            
+    except ValueError:
+        return jsonify({'success': False, 'error': '配置数据格式错误'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'保存失败: {str(e)}'})
 
 @app.errorhandler(404)
 def not_found(error):

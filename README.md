@@ -201,32 +201,53 @@ export DEEPSEEK_API_KEY=your_api_key
 
 ### Docker 部署
 
-创建 `Dockerfile`：
+#### 快速部署（推荐）
 
-```dockerfile
-FROM python:3.9-slim
+1. **配置环境变量**
+   ```bash
+   # 复制环境变量模板
+   cp .env.example .env
+   
+   # 编辑 .env 文件，配置您的 API 密钥
+   nano .env
+   ```
 
-WORKDIR /app
+2. **一键部署**
+   ```bash
+   # 运行部署脚本
+   ./deploy.sh
+   ```
 
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+#### 手动部署
 
-COPY . .
+1. **使用 Docker Compose（推荐）**
+   ```bash
+   # 构建并启动服务
+   docker-compose up -d
+   
+   # 查看日志
+   docker-compose logs -f
+   
+   # 停止服务
+   docker-compose down
+   ```
 
-EXPOSE 5000
+2. **使用 Docker 命令**
+   ```bash
+   # 构建镜像
+   docker build -t testgen-app .
+   
+   # 运行容器
+   docker run -d -p 5000:5000 --env-file .env -v $(pwd)/uploads:/app/uploads testgen-app
+   ```
 
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app:app"]
-```
+#### 生产环境建议
 
-构建和运行：
-
-```bash
-# 构建镜像
-docker build -t testgen-app .
-
-# 运行容器
-docker run -d -p 5000:5000 --env-file .env testgen-app
-```
+- 使用反向代理（如 Nginx）
+- 配置 HTTPS
+- 设置日志轮转
+- 定期备份数据
+- 修改默认管理员密码
 
 ## 故障排除
 
