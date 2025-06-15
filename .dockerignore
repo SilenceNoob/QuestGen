@@ -1,33 +1,39 @@
+# Git
+.git
+.gitignore
+
 # Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
+__pycache__
+*.pyc
+*.pyo
+*.pyd
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
+build
+develop-eggs
+dist
+downloads
+eggs
+.eggs
+lib
+lib64
+parts
+sdist
+var
+wheels
+*.egg-info
 .installed.cfg
 *.egg
 
 # Virtual environments
-venv/
-env/
-ENV/
+venv
+env
+ENV
+.venv
+.env
 
 # IDE
-.vscode/
-.idea/
+.vscode
+.idea
 *.swp
 *.swo
 *~
@@ -36,29 +42,28 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Git
-.git/
-.gitignore
-
-# Documentation
-README.md
-*.md
-
 # Logs
 *.log
+logs
 
-# Environment files
-.env
-.env.local
-.env.production
+# Documentation
+*.md
+README*
 
-# Temporary files
-tmp/
-temp/
+# Docker
+Dockerfile*
+docker-compose*
 
-# Uploads (will be created in container)
-uploads/
-
-# Test files
-面向对象 copy.md
+# Development files
 cookies.txt
+面向对象 copy.md
+
+# Uploads (will be mounted as volume)
+uploads/*
+!uploads/.gitkeep
+
+# Deployment
+deploy.sh
+
+# License
+LICENSE

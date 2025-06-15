@@ -4,7 +4,7 @@ services:
   testgen-app:
     build: .
     ports:
-      - "5000:5000"
+      - "8000:8000"
     environment:
       - FLASK_ENV=production
     env_file:
@@ -13,7 +13,7 @@ services:
       - ./uploads:/app/uploads
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -3,10 +3,14 @@ import json
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 from werkzeug.utils import secure_filename
 from functools import wraps
+from dotenv import load_dotenv
 from config import config
 from document_processor import DocumentProcessor
 from question_generator import QuestionGenerator
 from scorer import Scorer
+
+# 加载环境变量
+load_dotenv()
 
 app = Flask(__name__)
 
