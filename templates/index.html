@@ -130,6 +130,34 @@
                         <span class="format-tag">📙 MD</span>
                     </div>
                 </div>
+
+                <div class="generation-info">
+                    <h3>🔄 题目生成优化</h3>
+                    <div class="info-content">
+                        <p><strong>新策略：</strong>为提高生成稳定性，系统已升级为按题型分别生成。</p>
+                        <div class="feature-grid">
+                            <div class="feature-item">
+                                <span class="feature-icon">📊</span>
+                                <span>分类生成，避免遗漏</span>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon">⚡</span>
+                                <span>稳定性大幅提升</span>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon">🎯</span>
+                                <span>专门提示词优化</span>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon">📏</span>
+                                <span>智能数量限制</span>
+                            </div>
+                        </div>
+                        <div class="limits-info">
+                            <strong>数量限制：</strong>单选题≤10道，多选题≤8道，判断题≤10道，思考题≤5道
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
 
@@ -372,38 +400,31 @@
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            // 根据用户类型执行不同操作
-                            if ({{ 'true' if session.is_admin else 'false' }}) {
-                                // 管理员：跳转到配置页面
-                                window.location.href = '/config';
-                            } else {
-                                // 普通用户：直接生成题目（使用全局配置）
-                                button.disabled = true;
-                                button.innerHTML = '<span class="loading-spinner">⟳</span> 生成中...';
-                                
-                                fetch('/generate_questions', {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                    },
-                                    body: JSON.stringify({})
-                                })
-                                .then(response => response.json())
-                                .then(data => {
-                                    if (data.success) {
-                                        window.location.href = '/quiz';
-                                    } else {
-                                        alert('生成题目失败: ' + data.error);
-                                        button.disabled = false;
-                                        button.innerHTML = '🎯 生成题目';
-                                    }
-                                })
-                                .catch(error => {
-                                    alert('生成题目失败: ' + error);
+                            // 统一：直接生成题目（使用全局配置）
+                            button.disabled = true;
+                            button.innerHTML = '<span class="loading-spinner">⟳</span> 生成中...';
+                            fetch('/generate_questions', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({})
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    window.location.href = '/quiz';
+                                } else {
+                                    alert('生成题目失败: ' + data.error);
                                     button.disabled = false;
                                     button.innerHTML = '🎯 生成题目';
-                                });
-                            }
+                                }
+                            })
+                            .catch(error => {
+                                alert('生成题目失败: ' + error);
+                                button.disabled = false;
+                                button.innerHTML = '🎯 生成题目';
+                            });
                         } else {
                             alert('处理失败: ' + data.error);
                             button.disabled = false;

@@ -1,4 +1,5 @@
 import os
+import json
 from typing import Dict, Any
 
 class Config:
@@ -29,6 +30,17 @@ class Config:
         'true_false': 2,
         'thinking': 2  # 思考题
     }
+    
+    # 题目数量限制配置（防止超出AI上下文限制）
+    MAX_QUESTIONS_PER_TYPE = {
+        'single_choice': 10,
+        'multiple_choice': 8,
+        'true_false': 10,
+        'thinking': 5  # 思考题限制较少，因为容易超出上下文
+    }
+    
+    # 总题目数量限制
+    MAX_TOTAL_QUESTIONS = 20
     
     # 评分配置
     SCORING = {

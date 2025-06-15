@@ -39,26 +39,26 @@
                 <form id="questionConfigForm" class="config-form">
                     <div class="question-type">
                         <label for="singleChoice">单选题数量：</label>
-                        <input type="number" id="singleChoice" name="single_choice" min="0" max="20" value="{{ config.single_choice }}">
-                        <span class="question-desc">每题4个选项，只有1个正确答案</span>
+                        <input type="number" id="singleChoice" name="single_choice" min="0" max="10" value="{{ config.single_choice }}">
+                        <span class="question-desc">每题4个选项，只有1个正确答案（最多10道）</span>
                     </div>
                     
                     <div class="question-type">
                         <label for="multipleChoice">多选题数量：</label>
-                        <input type="number" id="multipleChoice" name="multiple_choice" min="0" max="10" value="{{ config.multiple_choice }}">
-                        <span class="question-desc">每题4个选项，可能有多个正确答案</span>
+                        <input type="number" id="multipleChoice" name="multiple_choice" min="0" max="8" value="{{ config.multiple_choice }}">
+                        <span class="question-desc">每题4个选项，可能有多个正确答案（最多8道）</span>
                     </div>
                     
                     <div class="question-type">
                         <label for="trueFalse">判断题数量：</label>
                         <input type="number" id="trueFalse" name="true_false" min="0" max="10" value="{{ config.true_false }}">
-                        <span class="question-desc">判断对错，只有正确或错误两个选项</span>
+                        <span class="question-desc">判断对错，只有正确或错误两个选项（最多10道）</span>
                     </div>
                     
                     <div class="question-type">
                         <label for="thinking">思考题数量：</label>
                         <input type="number" id="thinking" name="thinking" min="0" max="5" value="{{ config.thinking }}">
-                        <span class="question-desc">开放性问题，需要文字回答</span>
+                        <span class="question-desc">开放性问题，需要文字回答（最多5道，避免AI上下文限制）</span>
                     </div>
                     
                     <div class="total-count">

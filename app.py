@@ -438,17 +438,33 @@ def save_question_config_route():
             'thinking': int(data.get('thinking', 0))
         }
         
-        # 验证数值范围
+        # 验证数值范围（使用新的限制配置）
+        type_limits = {
+            'single_choice': 10,
+            'multiple_choice': 8,
+            'true_false': 10,
+            'thinking': 5
+        }
+        
+        type_names = {
+            'single_choice': '单选题',
+            'multiple_choice': '多选题',
+            'true_false': '判断题',
+            'thinking': '思考题'
+        }
+        
         for key, value in config.items():
-            if value < 0 or value > 20:
-                return jsonify({'success': False, 'error': f'{key} 数量必须在0-20之间'})
+            if value < 0:
+                return jsonify({'success': False, 'error': f'{type_names.get(key, key)}数量不能为负数'})
+            if value > type_limits.get(key, 20):
+                return jsonify({'success': False, 'error': f'{type_names.get(key, key)}数量不能超过{type_limits.get(key, 20)}道'})
         
         # 验证总数
         total = sum(config.values())
         if total == 0:
             return jsonify({'success': False, 'error': '请至少设置一种题型的数量'})
-        if total > 20:
-            return jsonify({'success': False, 'error': '题目总数不能超过20道'})
+        if total > app.config.get('MAX_TOTAL_QUESTIONS', 20):
+            return jsonify({'success': False, 'error': f'题目总数不能超过{app.config.get("MAX_TOTAL_QUESTIONS", 20)}道'})
         
         # 保存配置
         if save_question_config(config):

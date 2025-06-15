@@ -15,30 +15,50 @@ class QuestionGenerator:
         }
     
     def generate_questions(self, document_content: str, question_config: Dict[str, int]) -> Dict[str, Any]:
-        """生成题目"""
+        """生成题目 - 按题型分别请求AI"""
         if not self.api_key:
             return {'success': False, 'error': 'DeepSeek API密钥未配置'}
         
         try:
-            # 构建prompt
-            prompt = self._build_prompt(document_content, question_config)
+            all_questions = []
+            question_id = 1
             
-            # 调用API
-            response = self._call_deepseek_api(prompt)
+            # 按题型分别生成
+            for question_type, count in question_config.items():
+                if count <= 0:
+                    continue
+                    
+                # 限制单次请求的题目数量上限
+                max_per_request = self._get_max_questions_per_type(question_type)
+                if count > max_per_request:
+                    return {
+                        'success': False, 
+                        'error': f'{self._get_type_name(question_type)}数量不能超过{max_per_request}道，当前配置为{count}道'
+                    }
+                
+                # 生成该题型的题目
+                result = self._generate_questions_by_type(document_content, question_type, count)
+                
+                if not result['success']:
+                    return {
+                        'success': False,
+                        'error': f'生成{self._get_type_name(question_type)}失败: {result["error"]}'
+                    }
+                
+                # 为题目分配ID
+                for question in result['questions']:
+                    question['id'] = question_id
+                    question_id += 1
+                
+                all_questions.extend(result['questions'])
             
-            if not response['success']:
-                return response
-            
-            # 解析返回的题目
-            questions = self._parse_questions(response['content'])
-            
-            if not questions:
-                return {'success': False, 'error': '题目解析失败，请重试'}
+            if not all_questions:
+                return {'success': False, 'error': '未生成任何题目，请检查配置'}
             
             return {
                 'success': True,
-                'questions': questions,
-                'total_count': len(questions)
+                'questions': all_questions,
+                'total_count': len(all_questions)
             }
             
         except Exception as e:
@@ -138,58 +158,130 @@ class QuestionGenerator:
         except Exception as e:
             return {'success': False, 'error': f'AI评估失败: {str(e)}'}
     
-    def _build_prompt(self, content: str, config: Dict[str, int]) -> str:
-        """构建API请求的prompt"""
-        total_questions = sum(config.values())
+    def _generate_questions_by_type(self, document_content: str, question_type: str, count: int) -> Dict[str, Any]:
+        """按题型生成题目"""
+        try:
+            # 构建该题型的prompt
+            prompt = self._build_prompt_by_type(document_content, question_type, count)
+            
+            # 调用API
+            response = self._call_deepseek_api(prompt)
+            
+            if not response['success']:
+                return response
+            
+            # 解析返回的题目
+            questions = self._parse_questions(response['content'])
+            
+            # 验证题目类型和数量
+            valid_questions = [q for q in questions if q.get('type') == question_type]
+            
+            if len(valid_questions) < count:
+                return {
+                    'success': False, 
+                    'error': f'生成的{self._get_type_name(question_type)}数量不足，期望{count}道，实际{len(valid_questions)}道'
+                }
+            
+            # 只返回需要的数量
+            return {
+                'success': True,
+                'questions': valid_questions[:count]
+            }
+            
+        except Exception as e:
+            return {'success': False, 'error': f'生成{self._get_type_name(question_type)}异常: {str(e)}'}
+    
+    def _build_prompt_by_type(self, content: str, question_type: str, count: int) -> str:
+        """构建特定题型的API请求prompt"""
+        # 限制文档内容长度，避免超出上下文限制
+        max_content_length = 2500
+        if len(content) > max_content_length:
+            content = content[:max_content_length] + "\n\n[文档内容已截断]\n"
         
-        prompt = f"""请基于以下文档内容生成{total_questions}道题目：
-
-文档内容：
-{content[:3000]}  # 限制内容长度避免token过多
-
-要求：
-1. 生成{config.get('single_choice', 0)}道单选题，{config.get('multiple_choice', 0)}道多选题，{config.get('true_false', 0)}道判断题，{config.get('thinking', 0)}道思考题
-2. 题目要准确反映文档内容，不能脱离文档内容
-3. 单选题提供4个选项（A、B、C、D），多选题提供4个选项（可选择多个），判断题只需要对错判断
-4. 思考题是开放性问题，需要学生基于文档内容进行深入思考和分析，不提供选项
-5. 选项要有一定迷惑性但答案必须明确且正确
-6. 题目难度适中，适合理解性测试
-
-请严格按照以下JSON格式返回，不要添加任何其他内容：
-{{
-  "questions": [
-    {{
+        type_descriptions = {
+            'single_choice': '单选题提供4个选项（A、B、C、D），只有一个正确答案',
+            'multiple_choice': '多选题提供4个选项（A、B、C、D），可以有多个正确答案',
+            'true_false': '判断题只需要对错判断，选项为"A. 正确"和"B. 错误"',
+            'thinking': '思考题是开放性问题，需要学生基于文档内容进行深入思考和分析，不提供选项'
+        }
+        
+        type_examples = {
+            'single_choice': '''{
       "type": "single_choice",
       "question": "题目内容",
       "options": ["A. 选项1", "B. 选项2", "C. 选项3", "D. 选项4"],
       "correct_answer": "A",
       "explanation": "答案解释"
-    }},
-    {{
+    }''',
+            'multiple_choice': '''{
       "type": "multiple_choice",
       "question": "题目内容",
       "options": ["A. 选项1", "B. 选项2", "C. 选项3", "D. 选项4"],
       "correct_answer": ["A", "C"],
       "explanation": "答案解释"
-    }},
-    {{
+    }''',
+            'true_false': '''{
       "type": "true_false",
       "question": "题目内容",
       "options": ["A. 正确", "B. 错误"],
       "correct_answer": "A",
       "explanation": "答案解释"
-    }},
-    {{
+    }''',
+            'thinking': '''{
       "type": "thinking",
       "question": "思考题内容",
       "options": [],
       "correct_answer": "参考答案要点",
       "explanation": "评分标准和要点说明"
-    }}
+    }'''
+        }
+        
+        prompt = f"""请基于以下文档内容生成{count}道{self._get_type_name(question_type)}：
+
+文档内容：
+{content}
+
+要求：
+1. 生成{count}道{self._get_type_name(question_type)}
+2. {type_descriptions[question_type]}
+3. 题目要准确反映文档内容，不能脱离文档内容
+4. 选项要有一定迷惑性但答案必须明确且正确
+5. 题目难度适中，适合理解性测试
+
+请严格按照以下JSON格式返回，不要添加任何其他内容：
+{{
+  "questions": [
+    {type_examples[question_type]}
   ]
 }}"""
         
         return prompt
+    
+    def _get_max_questions_per_type(self, question_type: str) -> int:
+        """获取每种题型的最大数量限制"""
+        # 尝试从配置文件导入限制，如果失败则使用默认值
+        try:
+            from config import Config
+            limits = Config.MAX_QUESTIONS_PER_TYPE
+        except (ImportError, AttributeError):
+            # 默认限制值
+            limits = {
+                'single_choice': 10,
+                'multiple_choice': 8,
+                'true_false': 10,
+                'thinking': 5  # 思考题限制较少，因为容易超出上下文
+            }
+        return limits.get(question_type, 5)
+    
+    def _get_type_name(self, question_type: str) -> str:
+        """获取题型中文名称"""
+        names = {
+            'single_choice': '单选题',
+            'multiple_choice': '多选题',
+            'true_false': '判断题',
+            'thinking': '思考题'
+        }
+        return names.get(question_type, question_type)
     
     def _call_deepseek_api(self, prompt: str) -> Dict[str, Any]:
         """调用DeepSeek API"""
