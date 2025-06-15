@@ -62,6 +62,8 @@
                                 单选题
                             {% elif type_name == 'multiple_choice' %}
                                 多选题
+                            {% elif type_name == 'thinking' %}
+                                思考题
                             {% else %}
                                 判断题
                             {% endif %}
@@ -94,6 +96,8 @@
                                         单选题
                                     {% elif result.question_type == 'multiple_choice' %}
                                         多选题
+                                    {% elif result.question_type == 'thinking' %}
+                                        思考题
                                     {% else %}
                                         判断题
                                     {% endif %}
@@ -116,6 +120,55 @@
                             <h4>{{ result.question }}</h4>
                         </div>
                         
+                        {% if result.question_type == 'thinking' %}
+                        <!-- 思考题特殊显示 -->
+                        <div class="thinking-answer-review">
+                            <div class="user-thinking-answer">
+                                <h5>您的答案：</h5>
+                                <div class="thinking-text">
+                                    {% if result.user_answer %}
+                                        {{ result.user_answer | replace('\n', '<br>') | safe }}
+                                    {% else %}
+                                        <span class="no-answer">未作答</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            {% if result.ai_feedback %}
+                            <div class="ai-evaluation">
+                                <h5>🤖 AI评估反馈：</h5>
+                                <div class="ai-score">得分：{{ result.ai_score }}/100</div>
+                                <div class="ai-feedback-text">{{ result.ai_feedback }}</div>
+                                {% if result.ai_key_points %}
+                                <div class="ai-key-points">
+                                    <strong>涵盖的关键点：</strong>
+                                    <ul>
+                                        {% for point in result.ai_key_points %}
+                                        <li>{{ point }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                                {% endif %}
+                                {% if result.ai_suggestions %}
+                                <div class="ai-suggestions">
+                                    <strong>改进建议：</strong>
+                                    <ul>
+                                        {% for suggestion in result.ai_suggestions %}
+                                        <li>{{ suggestion }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            
+                            <div class="reference-answer">
+                                <h5>参考答案：</h5>
+                                <div class="reference-text">{{ result.correct_answer | replace('\n', '<br>') | safe }}</div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <!-- 选择题显示 -->
                         <div class="options-review">
                             {% for option in result.options %}
                             {% set option_letter = option.split('.')[0] %}
@@ -171,7 +224,9 @@
                             </div>
                             {% endfor %}
                         </div>
+                        {% endif %}
                         
+                        {% if result.question_type != 'thinking' %}
                         <div class="answer-summary">
                             <div class="answer-row">
                                 <span class="answer-label">您的答案：</span>
@@ -198,6 +253,7 @@
                                 </span>
                             </div>
                         </div>
+                        {% endif %}
                         
                         {% if result.explanation %}
                         <div class="explanation">

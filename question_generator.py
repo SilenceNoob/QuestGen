@@ -44,6 +44,100 @@ class QuestionGenerator:
         except Exception as e:
             return {'success': False, 'error': f'题目生成失败: {str(e)}'}
     
+    def evaluate_thinking_answer(self, question: str, reference_answer: str, user_answer: str, explanation: str) -> Dict[str, Any]:
+        """使用AI评估思考题答案"""
+        if not self.api_key:
+            return {'success': False, 'error': 'DeepSeek API密钥未配置'}
+        
+        if not user_answer or not user_answer.strip():
+            return {
+                'success': True,
+                'score': 0,
+                'feedback': '未提供答案',
+                'is_correct': False
+            }
+        
+        try:
+            prompt = f"""请作为一名专业的教师，评估学生对以下思考题的回答：
+
+题目：{question}
+
+参考答案要点：{reference_answer}
+
+评分标准：{explanation}
+
+学生答案：{user_answer}
+
+请按照以下要求进行评估：
+1. 评估学生答案是否理解了题目的核心要点
+2. 检查答案是否包含了参考答案的关键内容
+3. 评估答案的逻辑性和完整性
+4. 给出0-100的分数（0分表示完全错误或无关，100分表示完全正确且全面）
+5. 提供具体的反馈意见
+
+请严格按照以下JSON格式返回，不要添加任何其他内容：
+{{
+  "score": 85,
+  "feedback": "具体的评价反馈",
+  "is_correct": true,
+  "key_points_covered": ["要点1", "要点2"],
+  "suggestions": "改进建议"
+}}"""
+            
+            response = self._call_deepseek_api(prompt)
+            
+            if not response['success']:
+                return response
+            
+            # 解析AI评估结果
+            try:
+                import json
+                result = json.loads(response['content'])
+                
+                # 验证返回格式
+                if 'score' not in result or 'feedback' not in result:
+                    return {
+                        'success': True,
+                        'score': 50,  # 默认分数
+                        'feedback': '评估结果格式异常，给予中等分数',
+                        'is_correct': True
+                    }
+                
+                # 确保分数在合理范围内
+                score = max(0, min(100, result.get('score', 50)))
+                
+                return {
+                    'success': True,
+                    'score': score,
+                    'feedback': result.get('feedback', ''),
+                    'is_correct': score >= 60,  # 60分以上算正确
+                    'key_points_covered': result.get('key_points_covered', []),
+                    'suggestions': result.get('suggestions', '')
+                }
+                
+            except json.JSONDecodeError:
+                # 如果JSON解析失败，尝试从文本中提取分数
+                content = response['content']
+                score_match = re.search(r'"score"\s*:\s*(\d+)', content)
+                if score_match:
+                    score = int(score_match.group(1))
+                    return {
+                        'success': True,
+                        'score': max(0, min(100, score)),
+                        'feedback': '答案已评估，但详细反馈解析失败',
+                        'is_correct': score >= 60
+                    }
+                else:
+                    return {
+                        'success': True,
+                        'score': 50,
+                        'feedback': '无法解析评估结果，给予中等分数',
+                        'is_correct': True
+                    }
+                    
+        except Exception as e:
+            return {'success': False, 'error': f'AI评估失败: {str(e)}'}
+    
     def _build_prompt(self, content: str, config: Dict[str, int]) -> str:
         """构建API请求的prompt"""
         total_questions = sum(config.values())
@@ -54,11 +148,12 @@ class QuestionGenerator:
 {content[:3000]}  # 限制内容长度避免token过多
 
 要求：
-1. 生成{config.get('single_choice', 0)}道单选题，{config.get('multiple_choice', 0)}道多选题，{config.get('true_false', 0)}道判断题
+1. 生成{config.get('single_choice', 0)}道单选题，{config.get('multiple_choice', 0)}道多选题，{config.get('true_false', 0)}道判断题，{config.get('thinking', 0)}道思考题
 2. 题目要准确反映文档内容，不能脱离文档内容
 3. 单选题提供4个选项（A、B、C、D），多选题提供4个选项（可选择多个），判断题只需要对错判断
-4. 选项要有一定迷惑性但答案必须明确且正确
-5. 题目难度适中，适合理解性测试
+4. 思考题是开放性问题，需要学生基于文档内容进行深入思考和分析，不提供选项
+5. 选项要有一定迷惑性但答案必须明确且正确
+6. 题目难度适中，适合理解性测试
 
 请严格按照以下JSON格式返回，不要添加任何其他内容：
 {{
@@ -83,6 +178,13 @@ class QuestionGenerator:
       "options": ["A. 正确", "B. 错误"],
       "correct_answer": "A",
       "explanation": "答案解释"
+    }},
+    {{
+      "type": "thinking",
+      "question": "思考题内容",
+      "options": [],
+      "correct_answer": "参考答案要点",
+      "explanation": "评分标准和要点说明"
     }}
   ]
 }}"""
@@ -163,12 +265,18 @@ class QuestionGenerator:
                 return False
         
         # 检查题目类型
-        if question['type'] not in ['single_choice', 'multiple_choice', 'true_false']:
+        if question['type'] not in ['single_choice', 'multiple_choice', 'true_false', 'thinking']:
             return False
         
-        # 检查选项格式
-        if not isinstance(question['options'], list) or len(question['options']) == 0:
-            return False
+        # 检查选项格式（思考题可以没有选项）
+        if question['type'] == 'thinking':
+            # 思考题可以有空的选项列表
+            if not isinstance(question['options'], list):
+                return False
+        else:
+            # 其他题型必须有选项
+            if not isinstance(question['options'], list) or len(question['options']) == 0:
+                return False
         
         # 检查答案格式
         if question['type'] == 'multiple_choice':
@@ -192,6 +300,7 @@ class QuestionGenerator:
             'single_choice': 0,
             'multiple_choice': 0,
             'true_false': 0,
+            'thinking': 0,
             'total': len(questions)
         }
         

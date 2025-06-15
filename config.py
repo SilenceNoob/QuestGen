@@ -26,14 +26,16 @@ class Config:
     DEFAULT_QUESTION_COUNT = {
         'single_choice': 5,
         'multiple_choice': 3,
-        'true_false': 2
+        'true_false': 2,
+        'thinking': 2  # 思考题
     }
     
     # 评分配置
     SCORING = {
         'single_choice': 10,  # 单选题分值
         'multiple_choice': 15,  # 多选题分值
-        'true_false': 5       # 判断题分值
+        'true_false': 5,      # 判断题分值
+        'thinking': 20        # 思考题分值
     }
     
     @staticmethod

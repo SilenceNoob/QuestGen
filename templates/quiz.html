@@ -30,6 +30,7 @@
                         {% set single_count = questions|selectattr('type', 'equalto', 'single_choice')|list|length %}
                         {% set multiple_count = questions|selectattr('type', 'equalto', 'multiple_choice')|list|length %}
                         {% set tf_count = questions|selectattr('type', 'equalto', 'true_false')|list|length %}
+                        {% set thinking_count = questions|selectattr('type', 'equalto', 'thinking')|list|length %}
                         
                         <div class="stat-item">
                             <span class="stat-label">单选题：</span>
@@ -42,6 +43,10 @@
                         <div class="stat-item">
                             <span class="stat-label">判断题：</span>
                             <span class="stat-value">{{ tf_count }} 道</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">思考题：</span>
+                            <span class="stat-value">{{ thinking_count }} 道</span>
                         </div>
                         <div class="stat-item total">
                             <span class="stat-label">总计：</span>
@@ -62,6 +67,8 @@
                                     单选题
                                 {% elif question.type == 'multiple_choice' %}
                                     多选题
+                                {% elif question.type == 'thinking' %}
+                                    思考题
                                 {% else %}
                                     判断题
                                 {% endif %}
@@ -73,20 +80,32 @@
                         </div>
                         
                         <div class="options-container">
-                            {% for option in question.options %}
-                            <label class="option-label">
-                                {% if question.type == 'multiple_choice' %}
-                                    <input type="checkbox" 
-                                           name="question_{{ question.id }}" 
-                                           value="{{ option.split('.')[0] }}">
-                                {% else %}
-                                    <input type="radio" 
-                                           name="question_{{ question.id }}" 
-                                           value="{{ option.split('.')[0] }}">
-                                {% endif %}
-                                <span class="option-text">{{ option }}</span>
-                            </label>
-                            {% endfor %}
+                            {% if question.type == 'thinking' %}
+                                <div class="thinking-answer">
+                                    <textarea name="question_{{ question.id }}" 
+                                              class="thinking-textarea"
+                                              placeholder="请在此输入您的思考和分析...（建议至少100字）"
+                                              rows="6"></textarea>
+                                    <div class="char-counter">
+                                        <span class="current-chars">0</span> 字
+                                    </div>
+                                </div>
+                            {% else %}
+                                {% for option in question.options %}
+                                <label class="option-label">
+                                    {% if question.type == 'multiple_choice' %}
+                                        <input type="checkbox" 
+                                               name="question_{{ question.id }}" 
+                                               value="{{ option.split('.')[0] }}">
+                                    {% else %}
+                                        <input type="radio" 
+                                               name="question_{{ question.id }}" 
+                                               value="{{ option.split('.')[0] }}">
+                                    {% endif %}
+                                    <span class="option-text">{{ option }}</span>
+                                </label>
+                                {% endfor %}
+                            {% endif %}
                         </div>
                         
                         <div class="question-progress">
@@ -149,7 +168,8 @@
             const progressFill = document.getElementById('progressFill');
             const confirmModal = document.getElementById('confirmModal');
             const confirmMessage = document.getElementById('confirmMessage');
-            const totalQuestions = {{ questions|length }};
+            // 获取题目总数
+            const totalQuestions = parseInt('{{ questions|length }}');
             
             // 监听答案变化
             quizForm.addEventListener('change', updateProgress);
@@ -159,15 +179,26 @@
                 let answered = 0;
                 
                 for (let i = 1; i <= totalQuestions; i++) {
-                    const questionInputs = document.querySelectorAll(`input[name="question_${i}"]`);
                     const progressIndicator = document.getElementById(`progress_${i}`);
+                    const questionType = getQuestionType(i);
                     
                     let hasAnswer = false;
-                    questionInputs.forEach(input => {
-                        if (input.checked) {
+                    
+                    if (questionType === 'thinking') {
+                        // 思考题：检查textarea是否有内容
+                        const textarea = document.querySelector(`textarea[name="question_${i}"]`);
+                        if (textarea && textarea.value.trim()) {
                             hasAnswer = true;
                         }
-                    });
+                    } else {
+                        // 其他题型：检查input是否被选中
+                        const questionInputs = document.querySelectorAll(`input[name="question_${i}"]`);
+                        questionInputs.forEach(input => {
+                            if (input.checked) {
+                                hasAnswer = true;
+                            }
+                        });
+                    }
                     
                     if (hasAnswer) {
                         answered++;
@@ -211,25 +242,35 @@
                 const answers = {};
                 
                 for (let i = 1; i <= totalQuestions; i++) {
-                    const questionInputs = document.querySelectorAll(`input[name="question_${i}"]`);
                     const questionType = getQuestionType(i);
                     
-                    if (questionType === 'multiple_choice') {
-                        const selected = [];
-                        questionInputs.forEach(input => {
-                            if (input.checked) {
-                                selected.push(input.value);
-                            }
-                        });
-                        if (selected.length > 0) {
-                            answers[i] = selected;
+                    if (questionType === 'thinking') {
+                        // 思考题：获取textarea的值
+                        const textarea = document.querySelector(`textarea[name="question_${i}"]`);
+                        if (textarea && textarea.value.trim()) {
+                            answers[i] = textarea.value.trim();
                         }
                     } else {
-                        questionInputs.forEach(input => {
-                            if (input.checked) {
-                                answers[i] = input.value;
+                        // 其他题型：获取选中的选项
+                        const questionInputs = document.querySelectorAll(`input[name="question_${i}"]`);
+                        
+                        if (questionType === 'multiple_choice') {
+                            const selected = [];
+                            questionInputs.forEach(input => {
+                                if (input.checked) {
+                                    selected.push(input.value);
+                                }
+                            });
+                            if (selected.length > 0) {
+                                answers[i] = selected;
                             }
-                        });
+                        } else {
+                            questionInputs.forEach(input => {
+                                if (input.checked) {
+                                    answers[i] = input.value;
+                                }
+                            });
+                        }
                     }
                 }
                 
@@ -240,18 +281,30 @@
             function restoreAnswers(answers) {
                 Object.keys(answers).forEach(questionId => {
                     const answer = answers[questionId];
-                    const questionInputs = document.querySelectorAll(`input[name="question_${questionId}"]`);
+                    const questionType = getQuestionType(questionId);
                     
-                    if (Array.isArray(answer)) {
-                        // 多选题
-                        questionInputs.forEach(input => {
-                            input.checked = answer.includes(input.value);
-                        });
+                    if (questionType === 'thinking') {
+                        // 思考题：恢复textarea的值
+                        const textarea = document.querySelector(`textarea[name="question_${questionId}"]`);
+                        if (textarea && typeof answer === 'string') {
+                            textarea.value = answer;
+                            updateCharCounter(textarea);
+                        }
                     } else {
-                        // 单选题和判断题
-                        questionInputs.forEach(input => {
-                            input.checked = input.value === answer;
-                        });
+                        // 其他题型：恢复选中状态
+                        const questionInputs = document.querySelectorAll(`input[name="question_${questionId}"]`);
+                        
+                        if (Array.isArray(answer)) {
+                            // 多选题
+                            questionInputs.forEach(input => {
+                                input.checked = answer.includes(input.value);
+                            });
+                        } else {
+                            // 单选题和判断题
+                            questionInputs.forEach(input => {
+                                input.checked = input.value === answer;
+                            });
+                        }
                     }
                 });
             }
@@ -264,6 +317,7 @@
                 
                 if (typeText === '多选题') return 'multiple_choice';
                 if (typeText === '判断题') return 'true_false';
+                if (typeText === '思考题') return 'thinking';
                 return 'single_choice';
             }
             
@@ -356,6 +410,35 @@
             
             document.getElementById('messageClose').addEventListener('click', () => {
                 document.getElementById('message').style.display = 'none';
+            });
+            
+            // 字符计数器功能
+            function updateCharCounter(textarea) {
+                const counter = textarea.nextElementSibling;
+                if (counter && counter.classList.contains('char-counter')) {
+                    const currentLength = textarea.value.length;
+                    const maxLength = textarea.getAttribute('maxlength') || 1000;
+                    counter.textContent = `${currentLength}/${maxLength}`;
+                    
+                    // 根据字符数量改变颜色
+                    if (currentLength > maxLength * 0.9) {
+                        counter.style.color = '#dc3545';
+                    } else if (currentLength > maxLength * 0.7) {
+                        counter.style.color = '#ffc107';
+                    } else {
+                        counter.style.color = '#6c757d';
+                    }
+                }
+            }
+            
+            // 为所有思考题的textarea添加字符计数监听
+            document.querySelectorAll('textarea[name^="question_"]').forEach(textarea => {
+                textarea.addEventListener('input', function() {
+                    updateCharCounter(this);
+                    updateProgress(); // 更新进度状态
+                });
+                // 初始化计数器
+                updateCharCounter(textarea);
             });
             
             // 页面加载时恢复进度

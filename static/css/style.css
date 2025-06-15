@@ -1285,6 +1285,131 @@ body {
     font-size: 0.9rem;
 }
 
+/* 思考题样式 */
+.thinking-answer {
+    margin-top: 15px;
+}
+
+.thinking-textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: 12px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    resize: vertical;
+    transition: border-color 0.3s ease;
+}
+
+.thinking-textarea:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.char-counter {
+    text-align: right;
+    font-size: 12px;
+    color: #6c757d;
+    margin-top: 5px;
+    transition: color 0.3s ease;
+}
+
+/* 思考题结果显示样式 */
+.thinking-answer-review {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 15px 0;
+}
+
+.user-thinking-answer {
+    margin-bottom: 20px;
+}
+
+.user-thinking-answer h5 {
+    color: #495057;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.thinking-text {
+    background: white;
+    padding: 15px;
+    border-radius: 6px;
+    border-left: 4px solid #007bff;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+.no-answer {
+    color: #6c757d;
+    font-style: italic;
+}
+
+.ai-evaluation {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    border-radius: 8px;
+    margin: 15px 0;
+}
+
+.ai-evaluation h5 {
+    margin-bottom: 15px;
+    font-weight: 600;
+}
+
+.ai-score {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #ffd700;
+}
+
+.ai-feedback-text {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    line-height: 1.6;
+}
+
+.ai-key-points, .ai-suggestions {
+    margin-top: 15px;
+}
+
+.ai-key-points ul, .ai-suggestions ul {
+    margin-left: 20px;
+    margin-top: 8px;
+}
+
+.ai-key-points li, .ai-suggestions li {
+    margin-bottom: 5px;
+    line-height: 1.5;
+}
+
+.reference-answer {
+    margin-top: 20px;
+}
+
+.reference-answer h5 {
+    color: #28a745;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.reference-text {
+    background: #e8f5e8;
+    padding: 15px;
+    border-radius: 6px;
+    border-left: 4px solid #28a745;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
     .container {
@@ -1361,6 +1486,14 @@ body {
     
     .answer-label {
         min-width: auto;
+    }
+    
+    .thinking-answer-review {
+        padding: 15px;
+    }
+    
+    .ai-evaluation {
+        padding: 15px;
     }
 }
 

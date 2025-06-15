@@ -21,7 +21,7 @@ question_generator = QuestionGenerator(
     app.config['DEEPSEEK_API_KEY'],
     app.config['DEEPSEEK_API_URL']
 )
-scorer = Scorer(app.config['SCORING'])
+scorer = Scorer(app.config['SCORING'], question_generator)
 
 # 存储当前会话的数据（生产环境中应使用Redis等）
 session_data = {}
@@ -224,7 +224,8 @@ def generate_questions():
     question_config = {
         'single_choice': data.get('single_choice', 5),
         'multiple_choice': data.get('multiple_choice', 3),
-        'true_false': data.get('true_false', 2)
+        'true_false': data.get('true_false', 2),
+        'thinking': data.get('thinking', 0)
     }
     
     # 验证配置
@@ -238,14 +239,23 @@ def generate_questions():
     document_content = session_data[session_id]['document_content']
     result = question_generator.generate_questions(document_content, question_config)
     
+    # 校验各题型数量，若不足则报错
     if result['success']:
+        questions = result['questions']
+        from collections import Counter
+        type_counter = Counter([q.get('type') for q in questions])
+        missing_types = []
+        for qtype, count in question_config.items():
+            if count > 0 and type_counter.get(qtype, 0) < count:
+                missing_types.append(qtype)
+        if missing_types:
+            return jsonify({'success': False, 'error': f'题目生成异常，以下题型数量不足：{','.join(missing_types)}，请重试或减少题目数量'})
         # 存储生成的题目
-        session_data[session_id]['questions'] = result['questions']
+        session_data[session_id]['questions'] = questions
         session_data[session_id]['question_config'] = question_config
-        
         return jsonify({
             'success': True,
-            'questions': result['questions'],
+            'questions': questions,
             'total_count': result['total_count']
         })
     else:

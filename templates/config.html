@@ -53,8 +53,14 @@
                         <span class="question-desc">判断陈述是否正确</span>
                     </div>
                     
+                    <div class="question-type">
+                        <label for="thinking">思考题数量：</label>
+                        <input type="number" id="thinking" min="0" max="5" value="2">
+                        <span class="question-desc">开放性问题，需要文字回答，AI智能评分</span>
+                    </div>
+                    
                     <div class="total-questions">
-                        <strong>总题数：<span id="totalQuestions">10</span> 道</strong>
+                        <strong>总题数：<span id="totalQuestions">12</span> 道</strong>
                     </div>
                 </div>
             </div>
@@ -84,17 +90,18 @@
         const singleChoice = document.getElementById('singleChoice');
         const multipleChoice = document.getElementById('multipleChoice');
         const trueFalse = document.getElementById('trueFalse');
+        const thinking = document.getElementById('thinking');
         const totalQuestions = document.getElementById('totalQuestions');
         const generateBtn = document.getElementById('generateBtn');
 
         // 更新总题数
         function updateTotalQuestions() {
-            const total = parseInt(singleChoice.value) + parseInt(multipleChoice.value) + parseInt(trueFalse.value);
+            const total = parseInt(singleChoice.value) + parseInt(multipleChoice.value) + parseInt(trueFalse.value) + parseInt(thinking.value);
             totalQuestions.textContent = total;
         }
 
         // 监听输入变化
-        [singleChoice, multipleChoice, trueFalse].forEach(input => {
+        [singleChoice, multipleChoice, trueFalse, thinking].forEach(input => {
             input.addEventListener('input', updateTotalQuestions);
         });
 
@@ -103,10 +110,11 @@
             const config = {
                 single_choice: parseInt(singleChoice.value),
                 multiple_choice: parseInt(multipleChoice.value),
-                true_false: parseInt(trueFalse.value)
+                true_false: parseInt(trueFalse.value),
+                thinking: parseInt(thinking.value)
             };
             
-            const total = config.single_choice + config.multiple_choice + config.true_false;
+            const total = config.single_choice + config.multiple_choice + config.true_false + config.thinking;
             if (total === 0) {
                 showMessage('请至少选择一种题型', 'error');
                 return;

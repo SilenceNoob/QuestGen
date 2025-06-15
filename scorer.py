@@ -1,10 +1,11 @@
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any
 
 class Scorer:
     """评分器，处理答案对比和评分计算"""
     
-    def __init__(self, scoring_config: Dict[str, int]):
+    def __init__(self, scoring_config: Dict[str, int], question_generator=None):
         self.scoring_config = scoring_config
+        self.question_generator = question_generator
     
     def calculate_score(self, questions: List[Dict[str, Any]], user_answers: Dict[str, Any]) -> Dict[str, Any]:
         """计算总分和详细结果"""
@@ -24,13 +25,27 @@ class Scorer:
             max_score += question_score
             
             # 判断答案是否正确
-            is_correct = self._check_answer(question_type, correct_answer, user_answer)
-            
-            if is_correct:
-                earned_score = question_score
-                correct_count += 1
+            if question_type == 'thinking':
+                # 思考题使用AI评估
+                ai_result = self._evaluate_thinking_question(
+                    question['question'], 
+                    correct_answer, 
+                    user_answer, 
+                    question.get('explanation', '')
+                )
+                is_correct = ai_result.get('is_correct', False)
+                # 思考题按比例计分
+                earned_score = int(question_score * ai_result.get('score', 0) / 100)
+                if ai_result.get('score', 0) >= 60:
+                    correct_count += 1
             else:
-                earned_score = 0
+                # 其他题型使用传统方法
+                is_correct = self._check_answer(question_type, correct_answer, user_answer)
+                if is_correct:
+                    earned_score = question_score
+                    correct_count += 1
+                else:
+                    earned_score = 0
             
             total_score += earned_score
             
@@ -47,6 +62,16 @@ class Scorer:
                 'max_score': question_score,
                 'explanation': question.get('explanation', '')
             }
+            
+            # 为思考题添加AI评估详情
+            if question_type == 'thinking' and 'ai_result' in locals():
+                result_detail.update({
+                    'ai_score': ai_result.get('score', 0),
+                    'ai_feedback': ai_result.get('feedback', ''),
+                    'key_points_covered': ai_result.get('key_points_covered', []),
+                    'suggestions': ai_result.get('suggestions', '')
+                })
+            
             results.append(result_detail)
         
         # 计算百分比分数
@@ -62,6 +87,41 @@ class Scorer:
             'results': results,
             'grade': self._get_grade(percentage)
         }
+    
+    def _evaluate_thinking_question(self, question: str, reference_answer: str, user_answer: str, explanation: str) -> Dict[str, Any]:
+        """评估思考题答案"""
+        if not self.question_generator:
+            # 如果没有question_generator，使用简单的文本匹配评估
+            if not user_answer or not user_answer.strip():
+                return {
+                    'score': 0,
+                    'feedback': '未提供答案',
+                    'is_correct': False
+                }
+            
+            # 简单的关键词匹配评估
+            user_lower = user_answer.lower()
+            ref_lower = reference_answer.lower()
+            
+            # 计算简单的相似度
+            common_words = set(user_lower.split()) & set(ref_lower.split())
+            if len(common_words) >= 2:
+                score = min(80, len(common_words) * 20)
+            elif len(user_answer.strip()) >= 50:  # 至少有一定长度的回答
+                score = 60
+            else:
+                score = 30
+            
+            return {
+                'score': score,
+                'feedback': f'基于关键词匹配的评估，匹配到{len(common_words)}个关键词',
+                'is_correct': score >= 60
+            }
+        
+        # 使用AI评估
+        return self.question_generator.evaluate_thinking_answer(
+            question, reference_answer, user_answer, explanation
+        )
     
     def _check_answer(self, question_type: str, correct_answer: Any, user_answer: Any) -> bool:
         """检查答案是否正确"""
