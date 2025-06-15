@@ -187,3 +187,5 @@ Desktop.ini
 *.swp
 *.swo
 *~
+
+sessions/

@@ -8,6 +8,7 @@ from config import config
 from document_processor import DocumentProcessor
 from question_generator import QuestionGenerator
 from scorer import Scorer
+from session_manager import FileSessionManager
 
 # 加载环境变量
 load_dotenv()
@@ -18,6 +19,10 @@ app = Flask(__name__)
 config_name = os.environ.get('FLASK_CONFIG') or 'default'
 app.config.from_object(config[config_name])
 config[config_name].init_app(app)
+
+# 设置session为永久性
+from datetime import timedelta
+app.permanent_session_lifetime = timedelta(seconds=app.config.get('PERMANENT_SESSION_LIFETIME', 3600))
 
 # 全局题目配置文件路径
 QUESTION_CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'question_config.json')
@@ -58,8 +63,11 @@ question_generator = QuestionGenerator(
 )
 scorer = Scorer(app.config['SCORING'], question_generator)
 
-# 存储当前会话的数据（生产环境中应使用Redis等）
-session_data = {}
+# 使用文件系统存储会话数据，支持容器重启后的数据持久化
+session_manager = FileSessionManager(
+    session_dir='sessions',
+    timeout=app.config.get('PERMANENT_SESSION_LIFETIME', 3600)
+)
 
 # 认证装饰器
 def admin_required(f):
@@ -105,6 +113,7 @@ def login():
     password = request.form.get('password')
     
     if username in app.config['ADMIN_USERS'] and app.config['ADMIN_USERS'][username] == password:
+        session.permanent = True  # 设置为永久session
         session['is_admin'] = True
         session['admin_username'] = username
         flash('登录成功', 'success')
@@ -225,10 +234,11 @@ def select_documents():
     # 生成会话ID
     import uuid
     session_id = str(uuid.uuid4())
+    session.permanent = True  # 设置为永久session
     session['session_id'] = session_id
     
     # 存储文档内容
-    session_data[session_id] = {
+    session_data = {
         'document_content': combined_content,
         'document_info': {
             'filename': f"已选择 {len(selected_files)} 个文档",
@@ -237,19 +247,24 @@ def select_documents():
         },
         'is_from_selection': True
     }
+    session_manager.set(session_id, session_data)
     
     return jsonify({
         'success': True,
         'session_id': session_id,
-        'document_info': session_data[session_id]['document_info']
+        'document_info': session_data['document_info']
     })
 
 @app.route('/generate_questions', methods=['POST'])
 def generate_questions():
     """生成题目"""
     session_id = session.get('session_id')
-    if not session_id or session_id not in session_data:
+    if not session_id or not session_manager.exists(session_id):
         return jsonify({'success': False, 'error': '会话已过期，请重新选择文档或上传文档'})
+    
+    session_data = session_manager.get(session_id)
+    if not session_data:
+        return jsonify({'success': False, 'error': '会话数据丢失，请重新选择文档或上传文档'})
     
     # 使用全局题目配置
     question_config = load_question_config()
@@ -262,7 +277,7 @@ def generate_questions():
         return jsonify({'success': False, 'error': '题目配置错误，总数超过20道，请联系管理员调整'})
     
     # 生成题目
-    document_content = session_data[session_id]['document_content']
+    document_content = session_data['document_content']
     result = question_generator.generate_questions(document_content, question_config)
     
     # 校验各题型数量，若不足则报错
@@ -277,8 +292,9 @@ def generate_questions():
         if missing_types:
             return jsonify({'success': False, 'error': f'题目生成异常，以下题型数量不足：{','.join(missing_types)}，请重试或联系管理员减少题目数量'})
         # 存储生成的题目
-        session_data[session_id]['questions'] = questions
-        session_data[session_id]['question_config'] = question_config
+        session_data['questions'] = questions
+        session_data['question_config'] = question_config
+        session_manager.set(session_id, session_data)
         return jsonify({
             'success': True,
             'questions': questions,
@@ -291,11 +307,16 @@ def generate_questions():
 def config_questions():
     """题目配置页面"""
     session_id = session.get('session_id')
-    if not session_id or session_id not in session_data:
+    if not session_id or not session_manager.exists(session_id):
         flash('会话已过期，请重新选择文档', 'error')
         return redirect(url_for('index'))
     
-    document_info = session_data[session_id]['document_info']
+    session_data = session_manager.get(session_id)
+    if not session_data:
+        flash('会话数据丢失，请重新选择文档', 'error')
+        return redirect(url_for('index'))
+    
+    document_info = session_data['document_info']
     
     return render_template('config.html', document_info=document_info)
 
@@ -303,16 +324,21 @@ def config_questions():
 def quiz():
     """答题页面"""
     session_id = session.get('session_id')
-    if not session_id or session_id not in session_data:
+    if not session_id or not session_manager.exists(session_id):
         flash('会话已过期，请重新上传文档', 'error')
         return redirect(url_for('index'))
     
-    if 'questions' not in session_data[session_id]:
+    session_data = session_manager.get(session_id)
+    if not session_data:
+        flash('会话数据丢失，请重新上传文档', 'error')
+        return redirect(url_for('index'))
+    
+    if 'questions' not in session_data:
         flash('请先生成题目', 'error')
         return redirect(url_for('config_questions'))
     
-    questions = session_data[session_id]['questions']
-    document_info = session_data[session_id]['document_info']
+    questions = session_data['questions']
+    document_info = session_data['document_info']
     
     return render_template('quiz.html', 
                          questions=questions, 
@@ -322,10 +348,14 @@ def quiz():
 def submit_answers():
     """提交答案并评分"""
     session_id = session.get('session_id')
-    if not session_id or session_id not in session_data:
+    if not session_id or not session_manager.exists(session_id):
         return jsonify({'success': False, 'error': '会话已过期，请重新上传文档'})
     
-    if 'questions' not in session_data[session_id]:
+    session_data = session_manager.get(session_id)
+    if not session_data:
+        return jsonify({'success': False, 'error': '会话数据丢失，请重新上传文档'})
+    
+    if 'questions' not in session_data:
         return jsonify({'success': False, 'error': '题目不存在，请重新生成'})
     
     data = request.get_json()
@@ -333,7 +363,7 @@ def submit_answers():
         return jsonify({'success': False, 'error': '答案数据格式错误'})
     
     user_answers = data['answers']
-    questions = session_data[session_id]['questions']
+    questions = session_data['questions']
     
     # 验证答案格式
     validation = scorer.validate_answers(questions, user_answers)
@@ -348,8 +378,9 @@ def submit_answers():
     score_result = scorer.calculate_score(questions, user_answers)
     
     # 存储结果
-    session_data[session_id]['score_result'] = score_result
-    session_data[session_id]['user_answers'] = user_answers
+    session_data['score_result'] = score_result
+    session_data['user_answers'] = user_answers
+    session_manager.set(session_id, session_data)
     
     return jsonify({
         'success': True,
@@ -360,16 +391,21 @@ def submit_answers():
 def result():
     """结果页面"""
     session_id = session.get('session_id')
-    if not session_id or session_id not in session_data:
+    if not session_id or not session_manager.exists(session_id):
         flash('会话已过期，请重新上传文档', 'error')
         return redirect(url_for('index'))
     
-    if 'score_result' not in session_data[session_id]:
+    session_data = session_manager.get(session_id)
+    if not session_data:
+        flash('会话数据丢失，请重新上传文档', 'error')
+        return redirect(url_for('index'))
+    
+    if 'score_result' not in session_data:
         flash('请先完成答题', 'error')
         return redirect(url_for('quiz'))
     
-    score_result = session_data[session_id]['score_result']
-    document_info = session_data[session_id]['document_info']
+    score_result = session_data['score_result']
+    document_info = session_data['document_info']
     
     # 获取统计信息
     statistics = scorer.get_statistics(score_result['results'])
@@ -383,13 +419,15 @@ def result():
 def restart():
     """重新开始"""
     session_id = session.get('session_id')
-    if session_id and session_id in session_data:
-        # 只清理上传的文件，不清理选择的文档
-        if 'filepath' in session_data[session_id] and not session_data[session_id].get('is_from_selection', False):
-            doc_processor.cleanup_file(session_data[session_id]['filepath'])
+    if session_id and session_manager.exists(session_id):
+        session_data = session_manager.get(session_id)
+        if session_data:
+            # 只清理上传的文件，不清理选择的文档
+            if 'filepath' in session_data and not session_data.get('is_from_selection', False):
+                doc_processor.cleanup_file(session_data['filepath'])
         
         # 清理会话数据
-        del session_data[session_id]
+        session_manager.delete(session_id)
     
     # 保留管理员登录状态
     is_admin = session.get('is_admin')
@@ -405,10 +443,13 @@ def restart():
 def session_status():
     """检查会话状态"""
     session_id = session.get('session_id')
-    if not session_id or session_id not in session_data:
+    if not session_id or not session_manager.exists(session_id):
         return jsonify({'valid': False})
     
-    data = session_data[session_id]
+    data = session_manager.get(session_id)
+    if not data:
+        return jsonify({'valid': False})
+    
     status = {
         'valid': True,
         'has_document': 'document_content' in data,
@@ -504,4 +545,8 @@ if __name__ == '__main__':
         print("警告: DEEPSEEK_API_KEY 环境变量未设置")
         print("请设置环境变量: export DEEPSEEK_API_KEY='your-api-key'")
     
-    app.run(debug=True, port=8000)
+    # 根据配置设置调试模式和端口
+    debug_mode = app.config.get('DEBUG', False)
+    port = int(os.environ.get('APP_PORT', 5000))
+    
+    app.run(debug=debug_mode, port=port, host='0.0.0.0')

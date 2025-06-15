@@ -6,11 +6,12 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - FLASK_ENV=production
+      - FLASK_ENV=development
     env_file:
       - .env
     volumes:
       - ./uploads:/app/uploads
+      - ./sessions:/app/sessions
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]

@@ -6,16 +6,21 @@ class Config:
     """应用程序配置类"""
     
     # Flask配置
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'your-secret-key-here'
+    SECRET_KEY = os.environ.get('SECRET_KEY') or os.environ.get('FLASK_SECRET_KEY') or 'your-secret-key-here'
+    
+    # Session配置
+    PERMANENT_SESSION_LIFETIME = 3600  # 1小时
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SECURE = False  # 开发环境设为False，生产环境应设为True
     
     # 管理员账户配置（仅用于内部测试）
     ADMIN_USERS = {
-        'admin': 'admin123',  # 用户名: 密码
+        'admin': os.environ.get('ADMIN_PASSWORD', 'admin123'),  # 用户名: 密码
         'test': 'test123'     # 可以添加多个管理员账户
     }
     
-    # DeepSeek API配置
-    DEEPSEEK_API_KEY = os.environ.get('DEEPSEEK_API_KEY') or ''
+    # DeepSeek API配置 - 在init_app中动态设置
+    DEEPSEEK_API_KEY = None
     DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions'
     
     # 文件上传配置
@@ -53,15 +58,28 @@ class Config:
     @staticmethod
     def init_app(app):
         """初始化应用配置"""
-        pass
+        # 动态设置SECRET_KEY
+        app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or os.environ.get('FLASK_SECRET_KEY') or 'your-secret-key-here'
+        
+        # 动态设置API密钥和其他环境变量配置
+        app.config['DEEPSEEK_API_KEY'] = os.environ.get('DEEPSEEK_API_KEY', '')
+        app.config['DEEPSEEK_API_URL'] = os.environ.get('DEEPSEEK_BASE_URL', 'https://api.deepseek.com/v1/chat/completions')
+        app.config['UPLOAD_FOLDER'] = os.environ.get('UPLOAD_FOLDER', 'uploads')
+        
+        # 设置最大内容长度
+        max_content = os.environ.get('MAX_CONTENT_LENGTH')
+        if max_content:
+            app.config['MAX_CONTENT_LENGTH'] = int(max_content)
 
 class DevelopmentConfig(Config):
     """开发环境配置"""
     DEBUG = True
+    SESSION_COOKIE_SECURE = False  # 开发环境禁用安全cookie
 
 class ProductionConfig(Config):
     """生产环境配置"""
     DEBUG = False
+    SESSION_COOKIE_SECURE = True  # 生产环境启用安全cookie
 
 config = {
     'development': DevelopmentConfig,
