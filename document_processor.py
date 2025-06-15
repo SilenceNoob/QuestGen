@@ -166,7 +166,7 @@ class DocumentProcessor:
         # 移除多余的空白字符
         text = re.sub(r'\s+', ' ', text)
         # 移除特殊字符但保留中文标点
-        text = re.sub(r'[^\w\s\u4e00-\u9fff，。！？；：""''（）()\[\]【】]', '', text)
+        text = re.sub(r'[^\w\s\u4e00-\u9fff，。！？；：""''（）()\\[\\]【】]', '', text)
         return text.strip()
     
     def cleanup_file(self, filepath: str) -> bool:
